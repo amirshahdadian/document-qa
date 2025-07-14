@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
 import streamlit as st
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS  # Fixed deprecated import
 from langchain.chains import RetrievalQA
 import tempfile
 from dotenv import load_dotenv
@@ -74,7 +74,7 @@ def setup_qa_chain(vector_store):
     """Setup the question-answering chain with improved parameters"""
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",  # Updated model name
+            model="gemini-1.5-flash",  # Fixed model name
             temperature=0.1,
             max_tokens=1000
         )
@@ -155,6 +155,70 @@ def main():
                         st.text(f"📄 {doc['filename']} ({doc['file_size']} bytes)")
                 else:
                     st.info("No documents uploaded yet")
+            
+            # Add Previous Chat Sessions section
+            st.markdown("---")
+            st.subheader("💬 Previous Chat Sessions")
+            if user_id:
+                try:
+                    chat_sessions = firebase_auth.get_chat_history(user_id, limit=10)
+                    if chat_sessions:
+                        session_options = {}
+                        for session in chat_sessions:
+                            session_timestamp = session.get('session_timestamp')
+                            message_count = session.get('message_count', 0)
+                            session_id = session.get('id')
+                            
+                            # Format session display name
+                            if hasattr(session_timestamp, 'strftime'):
+                                time_str = session_timestamp.strftime("%m/%d %H:%M")
+                            else:
+                                time_str = "Unknown time"
+                            
+                            display_name = f"{time_str} ({message_count} msgs)"
+                            session_options[display_name] = session
+                        
+                        # Add option for new session
+                        session_options["📝 New Session"] = None
+                        
+                        # Session selector
+                        selected_session_name = st.selectbox(
+                            "Select Session:",
+                            options=list(session_options.keys()),
+                            key="session_selector"
+                        )
+                        
+                        selected_session = session_options[selected_session_name]
+                        
+                        # Load selected session
+                        if selected_session and st.button("📖 Load Session"):
+                            # Convert saved format back to chat_history format
+                            saved_history = selected_session.get('chat_history', [])
+                            if saved_history and isinstance(saved_history[0], dict):
+                                # Convert from dict format to tuple format
+                                st.session_state.chat_history = [
+                                    (item['question'], item['answer']) 
+                                    for item in saved_history
+                                ]
+                            else:
+                                st.session_state.chat_history = saved_history
+                                
+                            st.session_state.current_session_id = selected_session.get('id')
+                            st.success("Session loaded!")
+                            st.rerun()
+                        
+                        # Start new session
+                        if selected_session_name == "📝 New Session" and st.button("🆕 New Session"):
+                            st.session_state.chat_history = []
+                            if 'current_session_id' in st.session_state:
+                                del st.session_state.current_session_id
+                            st.success("New session started!")
+                            st.rerun()
+                    else:
+                        st.info("No previous sessions found")
+                except Exception as e:
+                    st.error(f"Error loading chat sessions: {str(e)}")
+                    st.info("No previous sessions found")
     
     # Main app content
     if 'user' not in st.session_state:
@@ -167,13 +231,20 @@ def main():
     st.title("📚 PDF Document Q&A with RAG (Gemini)")
     st.markdown("Upload a PDF document and ask questions about its content!")
     
+    # Show current session info
+    user_id = st.session_state.user.get('localId')
+    if 'current_session_id' in st.session_state:
+        st.info(f"📋 Current Session: {st.session_state.current_session_id}")
+    else:
+        st.info("📋 Current Session: New (not saved)")
+    
     # Configuration sidebar
     with st.sidebar:
         st.markdown("---")
         st.header("⚙️ Configuration")
         
         # Model selection
-        model_options = ["gemini-2.5-flash", "gemini-2.5-pro"]
+        model_options = ["gemini-2.5-flash", "gemini-2.5-pro"]  # Fixed model names
         selected_model = st.selectbox("Select Model:", model_options)
         
         # Temperature setting
@@ -263,11 +334,13 @@ def main():
         st.header("💬 Ask Questions")
         
         # Display chat history
-        for i, (q, a) in enumerate(st.session_state.chat_history):
-            with st.container():
-                st.markdown(f"**Q{i+1}:** {q}")
-                st.markdown(f"**A{i+1}:** {a}")
-                st.markdown("---")
+        if st.session_state.chat_history:
+            st.subheader("📜 Chat History")
+            for i, (q, a) in enumerate(st.session_state.chat_history):
+                with st.container():
+                    st.markdown(f"**Q{i+1}:** {q}")
+                    st.markdown(f"**A{i+1}:** {a}")
+                    st.markdown("---")
         
         # Question input
         question = st.text_input(
@@ -275,12 +348,14 @@ def main():
             placeholder="e.g., What is the main topic of this document?"
         )
         
-        col1, col2, col3 = st.columns([1, 1, 3])
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
         with col1:
             ask_button = st.button("🚀 Ask", type="primary")
         with col2:
             if st.button("🗑️ Clear History"):
                 st.session_state.chat_history = []
+                if 'current_session_id' in st.session_state:
+                    del st.session_state.current_session_id
                 st.rerun()
         with col3:
             if st.button("💾 Save Session"):
@@ -288,9 +363,13 @@ def main():
                 if user_id and st.session_state.chat_history:
                     session_id = firebase_auth.save_chat_history(user_id, st.session_state.chat_history)
                     if session_id:
+                        st.session_state.current_session_id = session_id
                         st.success("Session saved!")
                     else:
                         st.error("Failed to save session")
+        with col4:
+            if st.button("🔄 Refresh Sessions"):
+                st.rerun()
         
         if question and ask_button:
             try:

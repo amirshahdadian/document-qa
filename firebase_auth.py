@@ -27,28 +27,36 @@ class FirebaseAuth:
         
     def _init_admin_sdk(self):
         """Initialize Firebase Admin SDK for server-side operations"""
-        if not firebase_admin._apps:
-            try:
-                # Try to use service account key from environment variable first
-                service_account_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
-                if service_account_key:
-                    decoded_key = base64.b64decode(service_account_key)
-                    service_account_info = json.loads(decoded_key)
-                    cred = credentials.Certificate(service_account_info)
+        # Check if default app already exists
+        try:
+            firebase_admin.get_app()
+            logger.info("Firebase Admin SDK already initialized")
+            return
+        except ValueError:
+            # Default app doesn't exist, so we can initialize it
+            pass
+    
+        try:
+            # Try to use service account key from environment variable first
+            service_account_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+            if service_account_key:
+                decoded_key = base64.b64decode(service_account_key)
+                service_account_info = json.loads(decoded_key)
+                cred = credentials.Certificate(service_account_info)
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase Admin SDK initialized successfully from environment variable")
+            else:
+                # Fallback to service account file (for local development only)
+                service_account_path = "rag-pdf-demo-firebase-adminsdk-fbsvc-00f8eceba4.json"
+                if os.path.exists(service_account_path):
+                    cred = credentials.Certificate(service_account_path)
                     firebase_admin.initialize_app(cred)
-                    logger.info("Firebase Admin SDK initialized successfully from environment variable")
+                    logger.info("Firebase Admin SDK initialized successfully from file")
                 else:
-                    # Fallback to service account file (for local development only)
-                    service_account_path = "rag-pdf-demo-firebase-adminsdk-fbsvc-00f8eceba4.json"
-                    if os.path.exists(service_account_path):
-                        cred = credentials.Certificate(service_account_path)
-                        firebase_admin.initialize_app(cred)
-                        logger.info("Firebase Admin SDK initialized successfully from file")
-                    else:
-                        raise FileNotFoundError("No Firebase service account credentials found")
-            except Exception as e:
-                logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
-                raise e
+                    raise FileNotFoundError("No Firebase service account credentials found")
+        except Exception as e:
+            logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+            raise e
     
     def sign_in_with_email_and_password(self, email, password):
         """Sign in user with email and password using Firebase REST API"""
@@ -158,39 +166,34 @@ class FirebaseAuth:
                     'timestamp': datetime.now()
                 })
             
+            # Generate a session title from the first question
+            session_title = "New Session"
+            if serializable_history:
+                first_question = serializable_history[0]['question']
+                session_title = first_question[:50] + "..." if len(first_question) > 50 else first_question
+            
             doc_ref.set({
                 'chat_history': serializable_history,
                 'session_timestamp': datetime.now(),
                 'session_id': doc_ref.id,
-                'message_count': len(serializable_history)
+                'message_count': len(serializable_history),
+                'session_title': session_title
             })
             return doc_ref.id
         except Exception as e:
             logger.error(f"Failed to save chat history: {e}")
             return None
     
-    def get_chat_history(self, user_id, limit=10):
-        """Get user's chat history from Firestore"""
+    def delete_chat_session(self, user_id, session_id):
+        """Delete a specific chat session"""
         try:
             db = firestore.client()
-            docs = db.collection('users').document(user_id).collection('chat_sessions')\
-                    .order_by('session_timestamp', direction=firestore.Query.DESCENDING)\
-                    .limit(limit).stream()
-            
-            chat_sessions = []
-            for doc in docs:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                # Convert back to tuple format for compatibility
-                if 'chat_history' in data:
-                    converted_history = [(msg['question'], msg['answer']) for msg in data['chat_history']]
-                    data['chat_history'] = converted_history
-                chat_sessions.append(data)
-            
-            return chat_sessions
+            doc_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
+            doc_ref.delete()
+            return True
         except Exception as e:
-            logger.error(f"Failed to get chat history: {e}")
-            return []
+            logger.error(f"Failed to delete chat session: {e}")
+            return False
     
     def save_document_metadata(self, user_id, filename, file_size, chunks_count):
         """Save document metadata to Firestore"""
@@ -226,6 +229,26 @@ class FirebaseAuth:
             return documents
         except Exception as e:
             logger.error(f"Failed to get user documents: {e}")
+            return []
+    
+    def get_chat_history(self, user_id, limit=10):
+        """Get user's chat history from Firestore"""
+        try:
+            db = firestore.client()
+            docs = db.collection('users').document(user_id).collection('chat_sessions')\
+                    .order_by('session_timestamp', direction=firestore.Query.DESCENDING)\
+                    .limit(limit)\
+                    .stream()
+            
+            chat_sessions = []
+            for doc in docs:
+                data = doc.to_dict()
+                data['id'] = doc.id
+                chat_sessions.append(data)
+            
+            return chat_sessions
+        except Exception as e:
+            logger.error(f"Failed to get chat history: {e}")
             return []
 
 def main():
