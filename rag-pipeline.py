@@ -9,6 +9,7 @@ from langchain.chains import RetrievalQA
 import tempfile
 from dotenv import load_dotenv
 import logging
+from firebase_auth import FirebaseAuth
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -98,12 +99,78 @@ def main():
         layout="wide"
     )
     
+    # Initialize Firebase Auth
+    firebase_auth = FirebaseAuth()
+    
+    # Authentication sidebar
+    with st.sidebar:
+        st.header("🔐 Authentication")
+        
+        if 'user' not in st.session_state:
+            # Login/Register tabs
+            tab1, tab2 = st.tabs(["Login", "Register"])
+            
+            with tab1:
+                with st.form("login_form"):
+                    email = st.text_input("Email")
+                    password = st.text_input("Password", type="password")
+                    if st.form_submit_button("Login"):
+                        user_data = firebase_auth.login(email, password)
+                        if user_data:
+                            st.session_state.user = user_data
+                            st.success("Logged in successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials")
+            
+            with tab2:
+                with st.form("register_form"):
+                    email = st.text_input("Email")
+                    password = st.text_input("Password", type="password")
+                    display_name = st.text_input("Display Name")
+                    if st.form_submit_button("Register"):
+                        user_data = firebase_auth.register(email, password, display_name)
+                        if user_data:
+                            st.session_state.user = user_data
+                            st.success("Registered successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Registration failed")
+        else:
+            # User is logged in
+            user_email = st.session_state.user.get('email', 'User')
+            st.success(f"Welcome {user_email}")
+            if st.button("Logout"):
+                firebase_auth.logout()
+                st.rerun()
+            
+            # User's document history
+            st.markdown("---")
+            st.subheader("📁 Your Documents")
+            user_id = st.session_state.user.get('localId')
+            if user_id:
+                documents = firebase_auth.get_user_documents(user_id)
+                if documents:
+                    for doc in documents[:5]:  # Show last 5 documents
+                        st.text(f"📄 {doc['filename']} ({doc['file_size']} bytes)")
+                else:
+                    st.info("No documents uploaded yet")
+    
+    # Main app content
+    if 'user' not in st.session_state:
+        st.title("📚 PDF Document Q&A with RAG")
+        st.warning("🔒 Please login to access the PDF Q&A system")
+        st.markdown("This app uses Google's Gemini AI to answer questions about your PDF documents using RAG (Retrieval Augmented Generation).")
+        return
+    
+    # User is authenticated - show main app
     st.title("📚 PDF Document Q&A with RAG (Gemini)")
     st.markdown("Upload a PDF document and ask questions about its content!")
     
-    # Sidebar with configuration
+    # Configuration sidebar
     with st.sidebar:
-        st.header("Configuration")
+        st.markdown("---")
+        st.header("⚙️ Configuration")
         
         # Model selection
         model_options = ["gemini-2.5-flash", "gemini-2.5-pro"]
@@ -175,6 +242,16 @@ def main():
                         return_source_documents=True
                     )
                     
+                    # Save document metadata to Firebase
+                    user_id = st.session_state.user.get('localId')
+                    if user_id:
+                        firebase_auth.save_document_metadata(
+                            user_id, 
+                            uploaded_file.name, 
+                            uploaded_file.size, 
+                            len(chunks)
+                        )
+                    
                     st.success(f"✅ PDF processed! {len(chunks)} chunks created.")
                     
             except Exception as e:
@@ -198,13 +275,22 @@ def main():
             placeholder="e.g., What is the main topic of this document?"
         )
         
-        col1, col2 = st.columns([1, 4])
+        col1, col2, col3 = st.columns([1, 1, 3])
         with col1:
             ask_button = st.button("🚀 Ask", type="primary")
         with col2:
             if st.button("🗑️ Clear History"):
                 st.session_state.chat_history = []
                 st.rerun()
+        with col3:
+            if st.button("💾 Save Session"):
+                user_id = st.session_state.user.get('localId')
+                if user_id and st.session_state.chat_history:
+                    session_id = firebase_auth.save_chat_history(user_id, st.session_state.chat_history)
+                    if session_id:
+                        st.success("Session saved!")
+                    else:
+                        st.error("Failed to save session")
         
         if question and ask_button:
             try:
