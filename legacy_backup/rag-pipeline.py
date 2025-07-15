@@ -74,7 +74,7 @@ def setup_qa_chain(vector_store):
     """Setup the question-answering chain with improved parameters"""
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",  # Fixed model name
+            model="gemini-2.5-flash",  # Fixed model name
             temperature=0.1,
             max_tokens=1000
         )
