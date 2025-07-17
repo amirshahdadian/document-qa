@@ -8,3 +8,4 @@ google-generativeai
 python-dotenv
 firebase-admin
 requests
+pytest>=7.0.0

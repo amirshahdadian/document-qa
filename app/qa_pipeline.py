@@ -67,7 +67,8 @@ class QAPipeline:
             if not question.strip():
                 raise ValueError("Question cannot be empty")
             
-            result = qa_chain({"query": question})
+            # Use invoke instead of deprecated __call__
+            result = qa_chain.invoke({"query": question})
             
             # Format the response
             response = {
