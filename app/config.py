@@ -32,7 +32,6 @@ SUPPORTED_FILE_TYPES = ["pdf"]
 AVAILABLE_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"]
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TEMPERATURE = 0.1
-DEFAULT_MAX_TOKENS = 1000
 
 # Text Processing Configuration
 CHUNK_SIZE = 1000

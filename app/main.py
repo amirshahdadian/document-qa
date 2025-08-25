@@ -543,6 +543,24 @@ def process_question(question):
             "content": error_message
         })
 
+def delete_chat_session(session_id: str, session_title: str):
+    """Delete a chat session."""
+    try:
+        user_id = st.session_state.user.get('localId')
+        if user_id:
+            success = st.session_state.auth_service.delete_chat_session(user_id, session_id)
+            if success:
+                # If we're deleting the current session, start a new chat
+                if st.session_state.current_session_id == session_id:
+                    start_new_chat()
+                else:
+                    show_success(f"Deleted chat session: {session_title}")
+                    st.rerun()
+            else:
+                st.error("❌ Failed to delete chat session")
+    except Exception as e:
+        handle_error(e, "Failed to delete chat session")
+
 def main():
     """Main application function."""
     # Page config

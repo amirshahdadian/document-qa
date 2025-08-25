@@ -1,6 +1,6 @@
 """
 Modular entry point for the PDF Q&A application.
-Run with: streamlit run app_modular.py
+Run with: streamlit run app.py
 """
 
 from app.main import main

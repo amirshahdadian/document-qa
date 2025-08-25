@@ -1,6 +1,5 @@
 Dockerfile
 .dockerignore
-.env
 __pycache__/
 *.pyc
 *.pyo

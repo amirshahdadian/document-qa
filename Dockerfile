@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy modular application code
 COPY app/ ./app/
-COPY app_modular.py .
+COPY app.py .
 
 # Expose the port that Streamlit runs on
 EXPOSE 8501
@@ -25,4 +25,4 @@ HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 ENV PORT=8501
 
 # Run via shell so that $PORT is expanded (using modular entry point)
-CMD ["sh", "-c", "streamlit run app_modular.py --server.port $PORT --server.enableCORS false"]
+CMD ["sh", "-c", "streamlit run app.py --server.port $PORT --server.enableCORS false"]

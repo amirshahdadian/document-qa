@@ -5,7 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.schema import Document
 from app.config import (
-    DEFAULT_MODEL, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS, 
+    DEFAULT_MODEL, DEFAULT_TEMPERATURE,
     DEFAULT_K_DOCS, DEFAULT_FETCH_K, SEARCH_TYPE
 )
 
@@ -28,24 +28,17 @@ class QAPipeline:
             logger.error(f"Error creating vector store: {str(e)}")
             raise e
     
-    def setup_qa_chain(
-        self, 
-        vector_store: FAISS, 
-        model: str = DEFAULT_MODEL,
-        temperature: float = DEFAULT_TEMPERATURE,
-        k_docs: int = DEFAULT_K_DOCS
-    ) -> RetrievalQA:
-        """Setup the question-answering chain."""
+    def setup_qa_chain(self, vector_store: FAISS) -> RetrievalQA:
+        """Setup the question-answering chain with default settings."""
         try:
             llm = ChatGoogleGenerativeAI(
-                model=model,
-                temperature=temperature,
-                max_tokens=DEFAULT_MAX_TOKENS
+                model=DEFAULT_MODEL,
+                temperature=DEFAULT_TEMPERATURE
             )
             
             retriever = vector_store.as_retriever(
                 search_type=SEARCH_TYPE,
-                search_kwargs={"k": k_docs, "fetch_k": DEFAULT_FETCH_K}
+                search_kwargs={"k": DEFAULT_K_DOCS, "fetch_k": DEFAULT_FETCH_K}
             )
             
             qa_chain = RetrievalQA.from_chain_type(
@@ -55,7 +48,7 @@ class QAPipeline:
                 return_source_documents=True
             )
             
-            logger.info(f"QA chain setup successfully with model: {model}")
+            logger.info(f"QA chain setup successfully with model: {DEFAULT_MODEL}")
             return qa_chain
         except Exception as e:
             logger.error(f"Error setting up QA chain: {str(e)}")
@@ -67,10 +60,8 @@ class QAPipeline:
             if not question.strip():
                 raise ValueError("Question cannot be empty")
             
-            # Use invoke instead of deprecated __call__
             result = qa_chain.invoke({"query": question})
             
-            # Format the response
             response = {
                 "question": question,
                 "answer": result["result"],
@@ -82,30 +73,4 @@ class QAPipeline:
             return response
         except Exception as e:
             logger.error(f"Error answering question: {str(e)}")
-            raise e
-    
-    def get_similar_documents(self, vector_store: FAISS, query: str, k: int = 3) -> List[Document]:
-        """Get similar documents for a query."""
-        try:
-            docs = vector_store.similarity_search(query, k=k)
-            return docs
-        except Exception as e:
-            logger.error(f"Error getting similar documents: {str(e)}")
-            return []
-    
-    def update_qa_chain_settings(
-        self, 
-        qa_chain: RetrievalQA, 
-        model: str = None,
-        temperature: float = None,
-        k_docs: int = None
-    ) -> RetrievalQA:
-        """Update QA chain settings."""
-        try:
-            # For now, we need to recreate the chain with new settings
-            # This is a limitation of the current LangChain implementation
-            logger.info("QA chain settings updated (requires recreation)")
-            return qa_chain
-        except Exception as e:
-            logger.error(f"Error updating QA chain settings: {str(e)}")
             raise e
