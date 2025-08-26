@@ -8,7 +8,8 @@ from datetime import datetime
 import logging
 import requests
 from typing import Optional, Dict, Any, List
-from app.config import FIREBASE_CONFIG, FIREBASE_SERVICE_ACCOUNT_KEY
+from app.config import FIREBASE_CONFIG, FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_OAUTH_CLIENT_ID
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,18 @@ class AuthService:
     def __init__(self):
         self.firebase_config = FIREBASE_CONFIG
         self._init_admin_sdk()
+    
+    def _get_redirect_uri(self) -> str:
+        """Get the current redirect URI based on the Streamlit session."""
+        try:
+            # Try to get the current URL from Streamlit
+            if hasattr(st, 'query_params'):
+                # Use the current host and port
+                return "http://localhost:8501"
+            else:
+                return "http://localhost:8501"
+        except:
+            return "http://localhost:8501"
         
     def _init_admin_sdk(self):
         """Initialize Firebase Admin SDK for server-side operations."""
@@ -88,6 +101,75 @@ class AuthService:
             logger.error(f"Registration error: {e}")
             return None
     
+    def sign_in_with_google_oauth(self, google_access_token: str) -> Optional[Dict[str, Any]]:
+        """Sign in with Google OAuth token using Firebase REST API."""
+        try:
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key={self.firebase_config['apiKey']}"
+            payload = {
+                "requestUri": "http://localhost",
+                "postBody": f"access_token={google_access_token}&providerId=google.com",
+                "returnSecureToken": True,
+                "returnIdpCredential": True
+            }
+            response = requests.post(url, json=payload)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                error_data = response.json()
+                error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                logger.error(f"Google login failed: {error_message}")
+                return None
+        except Exception as e:
+            logger.error(f"Google login error: {e}")
+            return None
+    
+    def get_google_oauth_url(self) -> str:
+        """Generate Google OAuth URL for authentication."""
+        if not GOOGLE_OAUTH_CLIENT_ID:
+            return ""
+        
+        redirect_uri = self._get_redirect_uri()
+        base_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        params = {
+            "client_id": GOOGLE_OAUTH_CLIENT_ID,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "access_type": "offline",
+            "state": "google_auth"
+        }
+        
+        param_string = urllib.parse.urlencode(params)
+        return f"{base_url}?{param_string}"
+    
+    def exchange_google_code_for_token(self, code: str) -> Optional[str]:
+        """Exchange Google authorization code for access token."""
+        try:
+            from app.config import GOOGLE_OAUTH_CLIENT_SECRET
+            
+            redirect_uri = self._get_redirect_uri()
+            url = "https://oauth2.googleapis.com/token"
+            payload = {
+                "client_id": GOOGLE_OAUTH_CLIENT_ID,
+                "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri
+            }
+            
+            response = requests.post(url, data=payload)
+            
+            if response.status_code == 200:
+                token_data = response.json()
+                return token_data.get("access_token")
+            else:
+                logger.error(f"Token exchange failed: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Token exchange error: {e}")
+            return None
+    
     def update_profile(self, id_token: str, display_name: str) -> bool:
         """Update user profile."""
         try:
@@ -111,9 +193,13 @@ class AuthService:
         """Register new user."""
         return self.create_user_with_email_and_password(email, password, display_name)
     
+    def login_with_google(self, google_access_token: str) -> Optional[Dict[str, Any]]:
+        """Login with Google OAuth token."""
+        return self.sign_in_with_google_oauth(google_access_token)
+    
     def logout(self) -> None:
         """Logout user."""
-        keys_to_remove = ['user', 'user_token', 'chat_history', 'current_session_id']
+        keys_to_remove = ['user', 'user_token', 'chat_history', 'current_session_id', 'google_auth_code']
         for key in keys_to_remove:
             if key in st.session_state:
                 del st.session_state[key]

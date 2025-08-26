@@ -9,3 +9,6 @@ python-dotenv
 firebase-admin
 requests
 pytest>=7.0.0
+streamlit-oauth
+google-auth
+google-auth-oauthlib
