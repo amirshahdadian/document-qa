@@ -12,3 +12,7 @@ pytest>=7.0.0
 streamlit-oauth
 google-auth
 google-auth-oauthlib
+
+# Evaluation and metrics
+scikit-learn
+numpy

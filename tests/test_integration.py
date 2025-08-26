@@ -28,7 +28,7 @@ class TestIntegration:
         mock_faiss.from_documents.return_value = mock_vector_store
         
         mock_qa_chain = Mock()
-        mock_qa_chain.return_value = {
+        mock_qa_chain.invoke.return_value = {
             "result": "AI stands for Artificial Intelligence",
             "source_documents": mock_documents
         }

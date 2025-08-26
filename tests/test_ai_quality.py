@@ -13,7 +13,7 @@ class TestAIQuality:
         
         # Mock QA chain with realistic responses
         mock_qa_chain = Mock()
-        mock_qa_chain.return_value = {
+        mock_qa_chain.invoke.return_value = {
             "result": "I criteri di eleggibilità per questa borsa di studio includono essere uno studente universitario regolarmente iscritto.",
             "source_documents": [
                 Document(page_content="Criteri di eleggibilità per borsa di studio", metadata={"page": 1})
@@ -34,7 +34,7 @@ class TestAIQuality:
         
         # Mock QA chain with summarization response
         mock_qa_chain = Mock()
-        mock_qa_chain.return_value = {
+        mock_qa_chain.invoke.return_value = {
             "result": "Questo documento è un bando per una borsa di studio universitaria. I punti principali includono: criteri di eleggibilità, documenti richiesti, scadenze per la domanda, e l'importo della borsa. La scadenza per la presentazione delle domande è il 31 marzo 2024.",
             "source_documents": [
                 Document(page_content="Bando borsa di studio universitaria", metadata={"page": 1})
@@ -58,7 +58,7 @@ class TestAIQuality:
         # Mock QA chain with Italian document responses
         mock_qa_chain = Mock()
         
-        def mock_qa_response(query_dict):
+        def mock_invoke(query_dict):
             query = query_dict["query"].lower()
             if "criteri" in query or "eligibility" in query:
                 return {
@@ -80,7 +80,7 @@ class TestAIQuality:
                 "source_documents": []
             }
         
-        mock_qa_chain.side_effect = mock_qa_response
+        mock_qa_chain.invoke.side_effect = mock_invoke
         
         # Test eligibility criteria question
         result = qa_pipeline.ask_question(mock_qa_chain, "What are the eligibility criteria for this scholarship?")
@@ -112,7 +112,7 @@ class TestAIQuality:
         for question in harmful_questions:
             try:
                 # Mock a safe response
-                mock_qa_chain.return_value = {
+                mock_qa_chain.invoke.return_value = {
                     "result": "I cannot provide information on harmful or illegal activities.",
                     "source_documents": []
                 }
@@ -199,7 +199,7 @@ class TestAIQuality:
         qa_pipeline = QAPipeline()
         
         mock_qa_chain = Mock()
-        mock_qa_chain.return_value = {
+        mock_qa_chain.invoke.return_value = {
             "result": "Per essere eleggibili per questa borsa di studio, gli studenti devono soddisfare i seguenti criteri: essere regolarmente iscritti all'università, avere un ISEE familiare non superiore a 25.000 euro, mantenere una media accademica di almeno 27/30, e presentare la domanda entro la scadenza stabilita del 31 marzo 2024.",
             "source_documents": [
                 Document(page_content="Criteri di eleggibilità per borsa di studio", metadata={"page": 1})
@@ -225,9 +225,9 @@ class TestAIQuality:
         # Mock context-aware response
         mock_qa_chain = Mock()
         
-        def mock_qa_response(query_dict):
+        def mock_invoke(query_dict):
             query = query_dict["query"].lower()
-            if "differenza" in query or "compare" in query:
+            if "differenza" in query or "compare" in query or "difference" in query:
                 return {
                     "result": "La differenza principale tra borse di studio e contributi è che le borse di studio sono basate sul merito accademico e la situazione economica, mentre i contributi sono principalmente basati sulla situazione economica. Le borse di studio hanno importi più elevati e requisiti più stringenti.",
                     "source_documents": [
@@ -240,7 +240,7 @@ class TestAIQuality:
                 "source_documents": []
             }
         
-        mock_qa_chain.side_effect = mock_qa_response
+        mock_qa_chain.invoke.side_effect = mock_invoke
         
         result = qa_pipeline.ask_question(mock_qa_chain, "What's the difference between scholarships and financial aid?")
         

@@ -1,28 +1,62 @@
 #!/usr/bin/env python3
 """
-Simple test runner script
+Enhanced test runner script with ML accuracy tests
 Usage: python run_tests.py
 """
 
 import subprocess
 import sys
 import os
+from pathlib import Path
 
 def run_tests():
-    """Run essential tests."""
+    """Run all tests including ML accuracy tests."""
     try:
         # Change to project directory
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         
-        # Run tests - simplified command
+        print("Running unit tests...")
+        # Run pytest with specific test files
         cmd = [
             sys.executable, "-m", "pytest", 
             "tests/",
-            "-v"
+            "-v",
+            "--tb=short"
         ]
         
         result = subprocess.run(cmd)
-        return result.returncode == 0
+        unit_tests_passed = result.returncode == 0
+        
+        print("\n" + "="*50)
+        if unit_tests_passed:
+            print("✅ Unit tests PASSED")
+        else:
+            print("❌ Unit tests FAILED")
+        
+        # Run evaluation if unit tests pass
+        if unit_tests_passed:
+            print("\nRunning ML evaluation...")
+            try:
+                eval_script = Path("evaluation/run_evaluation.py")
+                if eval_script.exists():
+                    eval_cmd = [sys.executable, str(eval_script)]
+                    eval_result = subprocess.run(eval_cmd)
+                    eval_passed = eval_result.returncode == 0
+                    
+                    if eval_passed:
+                        print("✅ ML evaluation PASSED")
+                    else:
+                        print("❌ ML evaluation FAILED")
+                    
+                    return unit_tests_passed and eval_passed
+                else:
+                    print("⚠️ ML evaluation script not found, skipping...")
+                    return unit_tests_passed
+            except Exception as e:
+                print(f"⚠️ Error running ML evaluation: {e}")
+                return unit_tests_passed
+        
+        return unit_tests_passed
         
     except Exception as e:
         print(f"Error running tests: {e}")
@@ -30,5 +64,6 @@ def run_tests():
 
 if __name__ == "__main__":
     success = run_tests()
-    print(f"\nTests {'PASSED' if success else 'FAILED'}")
+    print(f"\n{'='*50}")
+    print(f"Overall test result: {'✅ PASSED' if success else '❌ FAILED'}")
     sys.exit(0 if success else 1)

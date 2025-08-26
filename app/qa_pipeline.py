@@ -74,3 +74,41 @@ class QAPipeline:
         except Exception as e:
             logger.error(f"Error answering question: {str(e)}")
             raise e
+    
+    def get_similar_documents(self, vector_store: FAISS, query: str, k: int = 3) -> List[Document]:
+        """Get similar documents for a given query (for testing purposes)."""
+        try:
+            return vector_store.similarity_search(query, k=k)
+        except Exception as e:
+            logger.error(f"Error retrieving similar documents: {str(e)}")
+            raise e
+    
+    def calculate_retrieval_metrics(self, vector_store: FAISS, test_cases: List[Dict]) -> Dict[str, float]:
+        """Calculate retrieval metrics for evaluation."""
+        total_precision = 0
+        total_recall = 0
+        
+        for test_case in test_cases:
+            query = test_case["question"]
+            expected_relevant_docs = test_case.get("relevant_doc_ids", [])
+            
+            retrieved_docs = self.get_similar_documents(vector_store, query, k=5)
+            retrieved_doc_ids = [doc.metadata.get("doc_id", i) for i, doc in enumerate(retrieved_docs)]
+            
+            # Calculate precision and recall
+            relevant_retrieved = len(set(retrieved_doc_ids) & set(expected_relevant_docs))
+            precision = relevant_retrieved / len(retrieved_docs) if retrieved_docs else 0
+            recall = relevant_retrieved / len(expected_relevant_docs) if expected_relevant_docs else 0
+            
+            total_precision += precision
+            total_recall += recall
+        
+        avg_precision = total_precision / len(test_cases) if test_cases else 0
+        avg_recall = total_recall / len(test_cases) if test_cases else 0
+        f1_score = 2 * (avg_precision * avg_recall) / (avg_precision + avg_recall) if (avg_precision + avg_recall) > 0 else 0
+        
+        return {
+            "precision": avg_precision,
+            "recall": avg_recall,
+            "f1_score": f1_score
+        }
