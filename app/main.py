@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from app.config import validate_config, AVAILABLE_MODELS, DEFAULT_MODEL, GOOGLE_OAUTH_CLIENT_ID
+from app.config import validate_config, AVAILABLE_MODELS, DEFAULT_MODEL, GOOGLE_OAUTH_CLIENT_ID, logger
 from app.auth import AuthService
 from app.pdf_processing import PDFProcessor
 from app.qa_pipeline import QAPipeline
@@ -25,6 +25,10 @@ def initialize_simple_session_state():
         st.session_state.current_session_title = "New Chat"
     if "auth_service" not in st.session_state:
         st.session_state.auth_service = AuthService()
+    if "processed_auth_codes" not in st.session_state:
+        st.session_state.processed_auth_codes = set()
+    if "last_processed_code" not in st.session_state:
+        st.session_state.last_processed_code = None
 
 def handle_google_oauth_callback():
     """Handle Google OAuth callback."""
@@ -33,6 +37,12 @@ def handle_google_oauth_callback():
     if "code" in query_params and "state" in query_params:
         if query_params["state"] == "google_auth":
             auth_code = query_params["code"]
+            
+            # Check if we've already processed this callback
+            if 'last_processed_code' in st.session_state and st.session_state.last_processed_code == auth_code:
+                # Clear query params and return to avoid reprocessing
+                st.query_params.clear()
+                return
             
             with st.spinner("🔐 Signing in with Google..."):
                 # Exchange code for access token
@@ -44,6 +54,8 @@ def handle_google_oauth_callback():
                     
                     if user_data:
                         st.session_state.user = user_data
+                        st.session_state.last_processed_code = auth_code
+                        logger.debug(f"User session state after login: {st.session_state}")
                         st.success("✅ Signed in with Google successfully!")
                         
                         # Clear query parameters
@@ -51,8 +63,10 @@ def handle_google_oauth_callback():
                         st.rerun()
                     else:
                         st.error("❌ Failed to sign in with Google. Please try again.")
+                        st.query_params.clear()
                 else:
                     st.error("❌ Failed to authenticate with Google. Please try again.")
+                    st.query_params.clear()
 
 def render_auth_section():
     """Render authentication section in main area when not logged in."""
@@ -307,12 +321,17 @@ def load_chat_session(session):
         
         st.session_state.messages = messages
         
-        # Set document as processed (assume it was processed in the original session)
-        st.session_state.document_processed = True
-        st.session_state.current_document = session.get('document_name', 'Previous Document')
-        
-        # Note: We can't restore the QA chain, so user will need to re-upload document for new questions
+        # Clear QA chain and document processing state
         st.session_state.qa_chain = None
+        st.session_state.document_processed = False
+        st.session_state.current_document = None
+        
+        # Add a helpful message about re-uploading document
+        if messages:  # Only add if there were previous messages
+            st.session_state.messages.append({
+                "role": "system",
+                "content": "📄 **Chat session loaded!** To ask new questions, please upload the document again to reactivate the AI assistant."
+            })
         
         show_success(f"Loaded chat session: {st.session_state.current_session_title}")
         st.rerun()
@@ -470,16 +489,27 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
             }
             current_history.append(new_message)
             
-            # Update session
-            session_ref.update({
-                'chat_history': current_history,
-                'message_count': len(current_history),
-                'updated_at': datetime.now()
-            })
+            # Update session with retry logic
+            for attempt in range(3):
+                try:
+                    session_ref.update({
+                        'chat_history': current_history,
+                        'message_count': len(current_history),
+                        'updated_at': datetime.now()
+                    })
+                    logger.info(f"Auto-saved message for session {session_id}")
+                    return True
+                except Exception as retry_error:
+                    logger.warning(f"Retry {attempt + 1}/3 failed for auto-save: {retry_error}")
+                    if attempt == 2:
+                        raise retry_error
+                    
+        else:
+            logger.warning(f"Session {session_id} not found for auto-save")
+            return False
             
-            return True
     except Exception as e:
-        print(f"Error auto-saving message: {e}")
+        logger.error(f"Error auto-saving message: {e}")
         return False
 
 def render_example_questions():
@@ -508,9 +538,6 @@ def render_example_questions():
 
 def render_chat_interface():
     """Render the chat interface."""
-    if not st.session_state.document_processed:
-        return
-    
     st.markdown("### 💬 Chat")
     
     # Create chat container
@@ -541,28 +568,37 @@ def render_chat_interface():
             elif message["role"] == "system":
                 st.info(message["content"])
     
-    # Quick action buttons
-    st.markdown("### 🚀 Quick Actions")
-    col1, col2, col3 = st.columns(3)
+    # Only show quick actions if document is processed
+    if st.session_state.document_processed and st.session_state.qa_chain:
+        # Quick action buttons
+        st.markdown("### 🚀 Quick Actions")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📄 Summarize Document", use_container_width=True):
+                handle_quick_action("Please provide a comprehensive summary of this document, highlighting the main points, important dates, requirements, and key information.")
+        
+        with col2:
+            if st.button("🎯 Key Points", use_container_width=True):
+                handle_quick_action("Extract the most important key points from this document in bullet format, focusing on deadlines, requirements, and procedures.")
+        
+        with col3:
+            if st.button("📋 Eligibility Criteria", use_container_width=True):
+                handle_quick_action("What are the eligibility criteria mentioned in this document?")
+    elif st.session_state.messages and not st.session_state.document_processed:
+        st.info("💡 Upload a document above to activate AI features and quick actions.")
     
-    with col1:
-        if st.button("📄 Summarize Document", use_container_width=True):
-            handle_quick_action("Please provide a comprehensive summary of this document, highlighting the main points, important dates, requirements, and key information.")
-    
-    with col2:
-        if st.button("🎯 Key Points", use_container_width=True):
-            handle_quick_action("Extract the most important key points from this document in bullet format, focusing on deadlines, requirements, and procedures.")
-    
-    with col3:
-        if st.button("📋 Eligibility Criteria", use_container_width=True):
-            handle_quick_action("What are the eligibility criteria mentioned in this document?")
-    
-    # Chat input
+    # Chat input - always show but handle appropriately
     if prompt := st.chat_input("Ask a question about your document..."):
         handle_user_input(prompt)
 
 def handle_quick_action(prompt):
     """Handle quick action button clicks."""
+    # Check if QA chain is available
+    if not st.session_state.qa_chain:
+        st.warning("⚠️ Please upload a document first to use quick actions.")
+        return
+    
     st.session_state.messages.append({"role": "user", "content": prompt})
     process_question(prompt)
     st.rerun()
@@ -581,6 +617,15 @@ def handle_user_input(prompt):
 def process_question(question):
     """Process a question and add response to messages."""
     try:
+        # Check if QA chain is available
+        if not st.session_state.qa_chain:
+            error_message = "⚠️ Please upload a document first to activate the AI assistant. The document needs to be processed before I can answer questions."
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": error_message
+            })
+            return
+        
         with st.spinner("🤔 Thinking..."):
             qa_pipeline = QAPipeline()
             result = qa_pipeline.ask_question(st.session_state.qa_chain, question)

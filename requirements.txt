@@ -12,6 +12,7 @@ pytest>=7.0.0
 streamlit-oauth
 google-auth
 google-auth-oauthlib
+simsimd  # Add this for better performance
 
 # Evaluation and metrics
 scikit-learn

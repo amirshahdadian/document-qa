@@ -1,12 +1,21 @@
 import os
 import logging
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Cloud Run Configuration
+PORT = int(os.getenv("PORT", 8501))
+IS_PRODUCTION = os.getenv("GAE_ENV", "").startswith("standard") or os.getenv("GOOGLE_CLOUD_PROJECT") is not None
+
+# Configure logging based on environment
+log_level = logging.DEBUG if not IS_PRODUCTION else logging.INFO
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Google API Configuration
@@ -47,8 +56,16 @@ DEFAULT_K_DOCS = 5
 DEFAULT_FETCH_K = 10
 SEARCH_TYPE = "mmr"  # Maximum Marginal Relevance
 
+# Cache validation result to avoid repeated calls
+_config_validated = False
+
 def validate_config():
     """Validate that all required configuration is present."""
+    global _config_validated
+    
+    if _config_validated:
+        return True
+    
     required_vars = [
         "GOOGLE_API_KEY",
         "FIREBASE_API_KEY",
@@ -69,5 +86,16 @@ def validate_config():
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         return False
     
+    _config_validated = True
     logger.info("Configuration validated successfully")
     return True
+
+# Only test API key in development
+if not IS_PRODUCTION:
+    try:
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content("Hello")
+        print("API key is working!")
+    except Exception as e:
+        print(f"API key error: {e}")

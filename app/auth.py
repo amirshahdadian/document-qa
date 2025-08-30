@@ -19,13 +19,21 @@ class AuthService:
         self._init_admin_sdk()
     
     def _get_redirect_uri(self) -> str:
-        """Get the current redirect URI based on the Streamlit session."""
+        """Get the current redirect URI based on the environment."""
         try:
-            # Try to get the current URL from Streamlit
-            if hasattr(st, 'query_params'):
-                # Use the current host and port
-                return "http://localhost:8501"
+            # In production (Cloud Run), use the actual service URL
+            if os.getenv("GOOGLE_CLOUD_PROJECT"):
+                # Try to get the actual Cloud Run service URL
+                service_url = os.getenv("CLOUD_RUN_SERVICE_URL")
+                if service_url:
+                    return service_url
+                # Fallback to constructing URL from project info
+                project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+                region = os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
+                service_name = os.getenv("K_SERVICE", "document-qa")
+                return f"https://{service_name}-{hash(project_id) % 1000000}.{region}.run.app"
             else:
+                # Development mode
                 return "http://localhost:8501"
         except:
             return "http://localhost:8501"
@@ -38,7 +46,7 @@ class AuthService:
             return
         except ValueError:
             pass
-    
+
         try:
             if FIREBASE_SERVICE_ACCOUNT_KEY:
                 decoded_key = base64.b64decode(FIREBASE_SERVICE_ACCOUNT_KEY)
@@ -148,6 +156,14 @@ class AuthService:
         try:
             from app.config import GOOGLE_OAUTH_CLIENT_SECRET
             
+            # Check if we've already processed this code
+            if 'processed_auth_codes' not in st.session_state:
+                st.session_state.processed_auth_codes = set()
+            
+            if code in st.session_state.processed_auth_codes:
+                logger.warning(f"Authorization code already processed: {code[:10]}...")
+                return None
+            
             redirect_uri = self._get_redirect_uri()
             url = "https://oauth2.googleapis.com/token"
             payload = {
@@ -158,10 +174,16 @@ class AuthService:
                 "redirect_uri": redirect_uri
             }
             
+            logger.debug(f"Token exchange payload: {payload}")
+            logger.debug(f"Redirect URI during token exchange: {redirect_uri}")
+            
             response = requests.post(url, data=payload)
+            logger.debug(f"Token exchange response: {response.status_code} - {response.text}")
             
             if response.status_code == 200:
                 token_data = response.json()
+                # Mark this code as processed
+                st.session_state.processed_auth_codes.add(code)
                 return token_data.get("access_token")
             else:
                 logger.error(f"Token exchange failed: {response.text}")
@@ -230,6 +252,7 @@ class AuthService:
                 'message_count': len(serializable_history),
                 'session_title': session_title
             })
+            logger.debug(f"Chat history saved for user {user_id}: {serializable_history}")
             return doc_ref.id
         except Exception as e:
             logger.error(f"Failed to save chat history: {e}")
