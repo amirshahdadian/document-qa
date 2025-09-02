@@ -8,10 +8,12 @@ from datetime import datetime
 import logging
 import requests
 from typing import Optional, Dict, Any, List
-from app.config import FIREBASE_CONFIG, FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_OAUTH_CLIENT_ID
+from app.config import FIREBASE_CONFIG, FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_OAUTH_CLIENT_ID, IS_PRODUCTION
 import urllib.parse
 
 logger = logging.getLogger(__name__)
+if IS_PRODUCTION:
+    logger.setLevel(logging.ERROR)
 
 class AuthService:
     def __init__(self):
@@ -174,11 +176,13 @@ class AuthService:
                 "redirect_uri": redirect_uri
             }
             
-            logger.debug(f"Token exchange payload: {payload}")
-            logger.debug(f"Redirect URI during token exchange: {redirect_uri}")
+            if not IS_PRODUCTION:
+                logger.debug(f"Token exchange payload: {payload}")
+                logger.debug(f"Redirect URI during token exchange: {redirect_uri}")
             
             response = requests.post(url, data=payload)
-            logger.debug(f"Token exchange response: {response.status_code} - {response.text}")
+            if not IS_PRODUCTION:
+                logger.debug(f"Token exchange response: {response.status_code} - {response.text}")
             
             if response.status_code == 200:
                 token_data = response.json()
@@ -324,3 +328,43 @@ class AuthService:
         except Exception as e:
             logger.error(f"Failed to delete chat session: {e}")
             return False
+    
+    def save_document_session(self, user_id: str, session_id: str, filename: str, file_size: int, chunks_count: int, file_hash: str) -> bool:
+        """Save document session with file information."""
+        try:
+            db = firestore.client()
+            session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
+            
+            # Update session with document information
+            session_ref.update({
+                'document_metadata': {
+                    'filename': filename,
+                    'file_size': file_size,
+                    'chunks_count': chunks_count,
+                    'file_hash': file_hash,
+                    'has_embeddings': True,
+                    'upload_timestamp': datetime.now()
+                },
+                'updated_at': datetime.now()
+            })
+            
+            logger.info(f"Saved document session for user {user_id}, session {session_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save document session: {e}")
+            return False
+
+    def get_session_document_info(self, user_id: str, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get document information for a session."""
+        try:
+            db = firestore.client()
+            session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
+            session_doc = session_ref.get()
+            
+            if session_doc.exists:
+                session_data = session_doc.to_dict()
+                return session_data.get('document_metadata')
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get session document info: {e}")
+            return None

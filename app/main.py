@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from app.config import validate_config, AVAILABLE_MODELS, DEFAULT_MODEL, GOOGLE_OAUTH_CLIENT_ID, logger
+from app.config import validate_config, AVAILABLE_MODELS, DEFAULT_MODEL, GOOGLE_OAUTH_CLIENT_ID, logger, IS_PRODUCTION
 from app.auth import AuthService
 from app.pdf_processing import PDFProcessor
 from app.qa_pipeline import QAPipeline
@@ -8,6 +8,13 @@ from app.utils import (
     initialize_session_state, format_file_size, handle_error, 
     show_success, show_info, show_warning, format_timestamp
 )
+import hashlib
+import logging
+
+# Set main logger level
+main_logger = logging.getLogger(__name__)
+if IS_PRODUCTION:
+    main_logger.setLevel(logging.ERROR)
 
 def initialize_simple_session_state():
     """Initialize minimal session state for simple UI."""
@@ -297,7 +304,7 @@ def start_new_chat():
     st.rerun()
 
 def load_chat_session(session):
-    """Load a previous chat session."""
+    """Load a previous chat session with document embeddings."""
     try:
         # Load session data
         st.session_state.current_session_id = session.get('id')
@@ -310,30 +317,80 @@ def load_chat_session(session):
         # Convert chat history to messages format
         for item in saved_history:
             if isinstance(item, dict):
-                # New format
                 messages.append({"role": "user", "content": item.get('question', '')})
                 messages.append({"role": "assistant", "content": item.get('answer', '')})
             else:
-                # Legacy format (tuple)
                 question, answer = item
                 messages.append({"role": "user", "content": question})
                 messages.append({"role": "assistant", "content": answer})
         
         st.session_state.messages = messages
         
-        # Clear QA chain and document processing state
-        st.session_state.qa_chain = None
-        st.session_state.document_processed = False
-        st.session_state.current_document = None
+        # Try to load existing document embeddings
+        user_id = st.session_state.user.get('localId')
+        session_id = st.session_state.current_session_id
         
-        # Add a helpful message about re-uploading document
-        if messages:  # Only add if there were previous messages
-            st.session_state.messages.append({
-                "role": "system",
-                "content": "📄 **Chat session loaded!** To ask new questions, please upload the document again to reactivate the AI assistant."
-            })
+        if user_id and session_id:
+            # Get document info
+            doc_info = st.session_state.auth_service.get_session_document_info(user_id, session_id)
+            
+            # Initialize QA pipeline
+            qa_pipeline = QAPipeline()
+            
+            # Debug: List available collections
+            if not IS_PRODUCTION:
+                collections = qa_pipeline.list_collections()
+                main_logger.info(f"Available collections: {collections}")
+                collection_info = qa_pipeline.get_collection_info(user_id, session_id)
+                main_logger.info(f"Collection info for session: {collection_info}")
+            
+            # Try to load vector store regardless of document info
+            vector_store = qa_pipeline.load_vector_store(user_id, session_id)
+            
+            if vector_store:
+                # Setup QA chain
+                qa_chain = qa_pipeline.setup_qa_chain(vector_store)
+                
+                # Update session state
+                st.session_state.qa_chain = qa_chain
+                st.session_state.document_processed = True
+                
+                # Get document name from doc_info or session data
+                document_name = None
+                if doc_info:
+                    document_name = doc_info.get('filename')
+                if not document_name:
+                    document_name = session.get('document_name', 'Unknown document')
+                
+                st.session_state.current_document = document_name
+                
+                # Add success message
+                st.session_state.messages.append({
+                    "role": "system",
+                    "content": f"📄 **Chat session loaded!** Document **{document_name}** is ready for questions."
+                })
+                
+                show_success(f"Loaded chat session with document: {document_name}")
+            else:
+                # Vector store not found, clear document state
+                st.session_state.qa_chain = None
+                st.session_state.document_processed = False
+                st.session_state.current_document = None
+                
+                # Check if we have document metadata but missing embeddings
+                if doc_info and doc_info.get('has_embeddings', False):
+                    st.session_state.messages.append({
+                        "role": "system", 
+                        "content": f"📄 **Chat session loaded!** The document embeddings for **{doc_info.get('filename', 'your document')}** were not found. This might happen after app restarts. Please upload the document again to continue asking questions."
+                    })
+                    show_warning("Chat loaded but document embeddings need to be recreated")
+                else:
+                    st.session_state.messages.append({
+                        "role": "system",
+                        "content": "📄 **Chat session loaded!** No document was associated with this session. Upload a document to start asking questions."
+                    })
+                    show_success(f"Loaded chat session: {st.session_state.current_session_title}")
         
-        show_success(f"Loaded chat session: {st.session_state.current_session_title}")
         st.rerun()
     except Exception as e:
         handle_error(e, "Failed to load chat session")
@@ -403,43 +460,69 @@ def process_document(uploaded_file):
             pdf_processor = PDFProcessor()
             qa_pipeline = QAPipeline()
             
+            # Generate file hash for deduplication
+            file_content = uploaded_file.getvalue()
+            file_hash = hashlib.sha256(file_content).hexdigest()
+            
             # Process PDF
             chunks = pdf_processor.load_and_process_pdf(uploaded_file)
             
-            # Create vector store
-            vector_store = qa_pipeline.create_vector_store(chunks)
+            # Get user info
+            user_id = st.session_state.user.get('localId')
+            session_id = st.session_state.current_session_id
+            
+            # Create new session if needed
+            if not session_id:
+                timestamp = datetime.now().strftime("%m/%d %H:%M")
+                session_title = f"{uploaded_file.name} - {timestamp}"
+                session_id = create_new_session(user_id, session_title, uploaded_file.name)
+                st.session_state.current_session_id = session_id
+                st.session_state.current_session_title = session_title
+            
+            # Create and persist vector store
+            vector_store = qa_pipeline.create_vector_store(chunks, user_id, session_id)
+            
+            # Verify the vector store was created properly
+            collection_info = qa_pipeline.get_collection_info(user_id, session_id)
+            if not collection_info.get('exists') or collection_info.get('count', 0) == 0:
+                raise ValueError("Vector store was not created properly")
             
             # Setup QA chain
             qa_chain = qa_pipeline.setup_qa_chain(vector_store)
-            
-            # Create session title from document name and timestamp
-            timestamp = datetime.now().strftime("%m/%d %H:%M")
-            session_title = f"{uploaded_file.name} - {timestamp}"
             
             # Update session state
             st.session_state.qa_chain = qa_chain
             st.session_state.document_processed = True
             st.session_state.current_document = uploaded_file.name
-            st.session_state.current_session_title = session_title
             
-            # Create new session in Firestore
-            user_id = st.session_state.user.get('localId')
-            if user_id:
-                session_id = create_new_session(user_id, session_title, uploaded_file.name)
-                st.session_state.current_session_id = session_id
-                
-                # Save document metadata
-                st.session_state.auth_service.save_document_metadata(
-                    user_id, uploaded_file.name, uploaded_file.size, len(chunks)
+            # Save document session info with enhanced metadata
+            if user_id and session_id:
+                st.session_state.auth_service.save_document_session(
+                    user_id, session_id, uploaded_file.name, 
+                    uploaded_file.size, len(chunks), file_hash
                 )
+                
+                # Also update the chat session with document info
+                from firebase_admin import firestore
+                db = firestore.client()
+                session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
+                session_ref.update({
+                    'document_name': uploaded_file.name,
+                    'updated_at': datetime.now()
+                })
             
             # Add system message
             st.session_state.messages.append({
                 "role": "system",
-                "content": f"Document **{uploaded_file.name}** has been processed successfully! You can now ask questions about it."
+                "content": f"Document **{uploaded_file.name}** has been processed and saved! You can now ask questions about it."
             })
             
-            show_success("✅ Document processed successfully!")
+            show_success("✅ Document processed and saved successfully!")
+            
+            # Debug info in development
+            if not IS_PRODUCTION:
+                main_logger.info(f"Document processed: {collection_info}")
+            
             st.rerun()
             
     except Exception as e:
@@ -497,7 +580,9 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
                         'message_count': len(current_history),
                         'updated_at': datetime.now()
                     })
-                    logger.info(f"Auto-saved message for session {session_id}")
+                    # Replace excessive logging
+                    if not IS_PRODUCTION:
+                        main_logger.info(f"Auto-saved message for session {session_id}")
                     return True
                 except Exception as retry_error:
                     logger.warning(f"Retry {attempt + 1}/3 failed for auto-save: {retry_error}")
@@ -509,7 +594,7 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
             return False
             
     except Exception as e:
-        logger.error(f"Error auto-saving message: {e}")
+        main_logger.error(f"Error auto-saving message: {e}")
         return False
 
 def render_example_questions():
@@ -655,10 +740,15 @@ def process_question(question):
         })
 
 def delete_chat_session(session_id: str, session_title: str):
-    """Delete a chat session."""
+    """Delete a chat session and its embeddings."""
     try:
         user_id = st.session_state.user.get('localId')
         if user_id:
+            # Delete vector store
+            qa_pipeline = QAPipeline()
+            qa_pipeline.delete_vector_store(user_id, session_id)
+            
+            # Delete from Firestore
             success = st.session_state.auth_service.delete_chat_session(user_id, session_id)
             if success:
                 # If we're deleting the current session, start a new chat

@@ -3,7 +3,8 @@ langchain
 langchain-google-genai
 langchain-community
 pypdf
-faiss-cpu
+chromadb
+langchain-chroma
 google-generativeai
 python-dotenv
 firebase-admin
@@ -12,7 +13,8 @@ pytest>=7.0.0
 streamlit-oauth
 google-auth
 google-auth-oauthlib
-simsimd  # Add this for better performance
+simsimd
+google-cloud-storage
 
 # Evaluation and metrics
 scikit-learn
