@@ -7,13 +7,6 @@
 
 A production-ready, AI-powered assistant built to help international students navigate the complexities of Italian bureaucratic documents. This application uses a Retrieval-Augmented Generation (RAG) pipeline to answer questions about PDFs like university announcements (*bandi*), regulations, and contracts.
 
----
-
-## 🚀 Live Demo
-
-The application is deployed on Google Cloud Run and is accessible here:
-
-**[https://document-qa-876776881787.europe-west1.run.app](https://document-qa-876776881787.europe-west1.run.app)**
 
 ---
 
