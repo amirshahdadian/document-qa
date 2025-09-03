@@ -1,79 +1,36 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-.venv/
-
-# Environment variables and secrets
+# Environment variables - CRITICAL SECURITY
 .env
 .env.local
-.env.*.local
-*.key
-*.pem
-*.json
-service-account-*.json
+.env.production
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ChromaDB local data
+chroma_db/
+*.sqlite3
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Evaluation results (generated files)
+evaluation/evaluation_results.json
 
 # Logs
 *.log
-logs/
+
+# OS files
+.DS_Store
+
+# IDE files (only if you use these)
+.vscode/
+.idea/
 
 # Temporary files
 *.tmp
 *.temp
-.cache/
-.pytest_cache/
-
-# Streamlit
-.streamlit/
-
-# Docker
-.dockerignore
-Dockerfile.dev
-docker-compose.override.yml
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Firebase
-firebase-debug.log
-.firebase/

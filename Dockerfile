@@ -1,7 +1,5 @@
-# Use an official Python runtime as a parent image
 FROM python:3.9-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
 # Install system dependencies
@@ -11,32 +9,31 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy modular application code
+# Configure Streamlit
+RUN mkdir -p .streamlit
+RUN echo '[server]\nheadless = true\nport = 8501\nenableCORS = false\nenableXsrfProtection = false\n\n[browser]\ngatherUsageStats = false\n\n[logger]\nlevel = "warning"' > .streamlit/config.toml
+
+# Copy application code
 COPY app/ ./app/
 COPY app.py .
 
-# Create directory for ChromaDB persistence
+# Create ChromaDB persistence directory
 RUN mkdir -p /app/chroma_db
 
-# Create a non-root user
+# Set environment variables
+ENV PORT=8501
+ENV PYTHONPATH=/app
+
+# Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
 USER app
 
-# Expose the port that Streamlit runs on
 EXPOSE 8501
 
-# Set environment variables for Cloud Run
-ENV PORT=8501
-ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_SERVER_ENABLE_CORS=false
-ENV STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
-ENV LOG_LEVEL=WARNING
-ENV GOOGLE_APPLICATION_CREDENTIALS=""
-
-# Run Streamlit
-CMD streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --logger.level WARNING
+# Run Streamlit application
+CMD ["python", "-m", "streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.fileWatcherType", "none"]

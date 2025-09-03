@@ -18,29 +18,31 @@ from langchain.schema import Document
 from typing import Dict, List, Any
 
 class RAGEvaluator:
+    """Evaluator for RAG system performance."""
+    
     def __init__(self):
         self.qa_pipeline = QAPipeline()
         self.results = []
     
     def load_test_dataset(self, dataset_path: str) -> Dict:
-        """Load the test dataset."""
+        """Load the test dataset from JSON file."""
         with open(dataset_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def evaluate_answer_accuracy(self, answer: str, expected_elements: List[str]) -> float:
-        """Calculate answer accuracy based on expected elements."""
+        """Calculate accuracy based on presence of expected elements."""
         answer_lower = answer.lower()
         found_elements = sum(1 for element in expected_elements 
                            if element.lower() in answer_lower)
         return found_elements / len(expected_elements) if expected_elements else 0
     
     def evaluate_answer_completeness(self, answer: str, min_words: int = 15) -> bool:
-        """Check if answer is complete enough."""
+        """Check if answer meets minimum word count."""
         word_count = len(answer.split())
         return word_count >= min_words
     
     def run_evaluation(self, dataset_path: str) -> Dict[str, Any]:
-        """Run complete evaluation on the test dataset."""
+        """Run evaluation on test dataset and return results."""
         dataset = self.load_test_dataset(dataset_path)
         test_cases = dataset["test_cases"]
         
@@ -53,14 +55,13 @@ class RAGEvaluator:
         for i, test_case in enumerate(test_cases):
             print(f"Processing test case {i+1}/{len(test_cases)}: {test_case['id']}")
             
-            # Create mock QA chain for testing - FIXED VERSION
+            # Create mock QA chain for testing
             from unittest.mock import Mock
             mock_qa_chain = Mock()
             
             # Simulate realistic answer based on source content
             simulated_answer = f"Secondo il documento, {test_case['source_content']}"
             
-            # FIX: Use invoke.return_value instead of return_value
             mock_qa_chain.invoke.return_value = {
                 "result": simulated_answer,
                 "source_documents": [Document(page_content=test_case['source_content'])]
@@ -142,7 +143,7 @@ class RAGEvaluator:
         return summary
     
     def save_results(self, results: Dict, output_path: str):
-        """Save evaluation results to file."""
+        """Save evaluation results to JSON file."""
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
 

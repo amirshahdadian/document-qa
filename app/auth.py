@@ -16,33 +16,34 @@ if IS_PRODUCTION:
     logger.setLevel(logging.ERROR)
 
 class AuthService:
+    """
+    Firebase authentication and data management service.
+    Handles user authentication, chat history, and document metadata storage.
+    """
+    
     def __init__(self):
         self.firebase_config = FIREBASE_CONFIG
         self._init_admin_sdk()
     
     def _get_redirect_uri(self) -> str:
-        """Get the current redirect URI based on the environment."""
-        try:
-            # In production (Cloud Run), use the actual service URL
-            if os.getenv("GOOGLE_CLOUD_PROJECT"):
-                # Try to get the actual Cloud Run service URL
-                service_url = os.getenv("CLOUD_RUN_SERVICE_URL")
-                if service_url:
-                    return service_url
-                # Fallback to constructing URL from project info
-                project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-                region = os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
-                service_name = os.getenv("K_SERVICE", "document-qa")
-                return f"https://{service_name}-{hash(project_id) % 1000000}.{region}.run.app"
+        """Determine the appropriate OAuth redirect URI based on environment."""
+        if IS_PRODUCTION:
+            service_url = os.getenv("CLOUD_RUN_SERVICE_URL")
+            if service_url:
+                logger.info(f"Using Cloud Run service URL: {service_url}")
+                return service_url
             else:
-                # Development mode
-                return "http://localhost:8501"
-        except:
-            return "http://localhost:8501"
+                fallback_url = "https://document-qa-876776881787.europe-west1.run.app"
+                logger.info(f"Using hardcoded production URL: {fallback_url}")
+                return fallback_url
+        else:
+            dev_uri = "http://localhost:8501"
+            logger.debug(f"Using local redirect URI: {dev_uri}")
+            return dev_uri
         
     def _init_admin_sdk(self):
-        """Initialize Firebase Admin SDK for server-side operations."""
-        try:
+        """Initialize Firebase Admin SDK with service account credentials."""
+        try: 
             firebase_admin.get_app()
             logger.info("Firebase Admin SDK already initialized")
             return
@@ -53,6 +54,49 @@ class AuthService:
             if FIREBASE_SERVICE_ACCOUNT_KEY:
                 decoded_key = base64.b64decode(FIREBASE_SERVICE_ACCOUNT_KEY)
                 service_account_info = json.loads(decoded_key)
+                
+                if 'private_key' in service_account_info:
+                    private_key = service_account_info['private_key']
+                    
+                    # Normalize private key format
+                    if '\\n' in private_key:
+                        private_key = private_key.replace('\\n', '\n')
+                    
+                    private_key = private_key.strip()
+                    
+                    # Reconstruct malformed keys
+                    if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                        key_content = private_key.replace('-----BEGIN PRIVATE KEY-----', '').replace('-----END PRIVATE KEY-----', '').strip()
+                        private_key = f"-----BEGIN PRIVATE KEY-----\n{key_content}\n-----END PRIVATE KEY-----"
+                    
+                    # Format single-line keys with proper line breaks
+                    lines = private_key.split('\n')
+                    if len(lines) == 1:
+                        key_start = '-----BEGIN PRIVATE KEY-----'
+                        key_end = '-----END PRIVATE KEY-----'
+                        
+                        if key_start in private_key and key_end in private_key:
+                            start_idx = private_key.find(key_start) + len(key_start)
+                            end_idx = private_key.find(key_end)
+                            key_content = private_key[start_idx:end_idx].strip()
+                            
+                            formatted_lines = [key_start]
+                            for i in range(0, len(key_content), 64):
+                                formatted_lines.append(key_content[i:i+64])
+                            formatted_lines.append(key_end)
+                            
+                            private_key = '\n'.join(formatted_lines)
+                    
+                    service_account_info['private_key'] = private_key
+                    
+                    # Validate key format
+                    if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                        logger.error("Private key does not start with correct header")
+                        raise ValueError("Invalid private key format - missing header")
+                    if not private_key.rstrip().endswith('-----END PRIVATE KEY-----'):
+                        logger.error("Private key does not end with correct footer")
+                        raise ValueError("Invalid private key format - missing footer")
+                
                 cred = credentials.Certificate(service_account_info)
                 firebase_admin.initialize_app(cred)
                 logger.info("Firebase Admin SDK initialized successfully")
@@ -63,7 +107,7 @@ class AuthService:
             raise e
     
     def sign_in_with_email_and_password(self, email: str, password: str) -> Optional[Dict[str, Any]]:
-        """Sign in user with email and password using Firebase REST API."""
+        """Authenticate user with email and password via Firebase REST API."""
         try:
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.firebase_config['apiKey']}"
             payload = {
@@ -85,7 +129,7 @@ class AuthService:
             return None
     
     def create_user_with_email_and_password(self, email: str, password: str, display_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Create user with email and password using Firebase REST API."""
+        """Create new user account via Firebase REST API."""
         try:
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={self.firebase_config['apiKey']}"
             payload = {
@@ -112,7 +156,7 @@ class AuthService:
             return None
     
     def sign_in_with_google_oauth(self, google_access_token: str) -> Optional[Dict[str, Any]]:
-        """Sign in with Google OAuth token using Firebase REST API."""
+        """Authenticate user with Google OAuth token via Firebase REST API."""
         try:
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key={self.firebase_config['apiKey']}"
             payload = {
@@ -135,7 +179,7 @@ class AuthService:
             return None
     
     def get_google_oauth_url(self) -> str:
-        """Generate Google OAuth URL for authentication."""
+        """Generate Google OAuth authorization URL."""
         if not GOOGLE_OAUTH_CLIENT_ID:
             return ""
         
@@ -158,14 +202,6 @@ class AuthService:
         try:
             from app.config import GOOGLE_OAUTH_CLIENT_SECRET
             
-            # Check if we've already processed this code
-            if 'processed_auth_codes' not in st.session_state:
-                st.session_state.processed_auth_codes = set()
-            
-            if code in st.session_state.processed_auth_codes:
-                logger.warning(f"Authorization code already processed: {code[:10]}...")
-                return None
-            
             redirect_uri = self._get_redirect_uri()
             url = "https://oauth2.googleapis.com/token"
             payload = {
@@ -176,28 +212,24 @@ class AuthService:
                 "redirect_uri": redirect_uri
             }
             
-            if not IS_PRODUCTION:
-                logger.debug(f"Token exchange payload: {payload}")
-                logger.debug(f"Redirect URI during token exchange: {redirect_uri}")
+            logger.debug(f"TOKEN_EXCHANGE: Sending POST to {url} with payload: {payload}")
             
             response = requests.post(url, data=payload)
-            if not IS_PRODUCTION:
-                logger.debug(f"Token exchange response: {response.status_code} - {response.text}")
+            
+            logger.debug(f"TOKEN_EXCHANGE: Received response. Status: {response.status_code}, Body: {response.text}")
             
             if response.status_code == 200:
                 token_data = response.json()
-                # Mark this code as processed
-                st.session_state.processed_auth_codes.add(code)
                 return token_data.get("access_token")
             else:
-                logger.error(f"Token exchange failed: {response.text}")
+                logger.error(f"TOKEN_EXCHANGE: Failed. Status: {response.status_code}, Response: {response.text}")
                 return None
         except Exception as e:
-            logger.error(f"Token exchange error: {e}")
+            logger.critical(f"TOKEN_EXCHANGE: Unhandled exception: {e}", exc_info=True)
             return None
     
     def update_profile(self, id_token: str, display_name: str) -> bool:
-        """Update user profile."""
+        """Update user profile information."""
         try:
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:update?key={self.firebase_config['apiKey']}"
             payload = {
@@ -211,31 +243,34 @@ class AuthService:
             logger.error(f"Profile update error: {e}")
             return False
     
+    # Public API methods
     def login(self, email: str, password: str) -> Optional[Dict[str, Any]]:
-        """Login user."""
+        """Public method for user login."""
         return self.sign_in_with_email_and_password(email, password)
     
     def register(self, email: str, password: str, display_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Register new user."""
+        """Public method for user registration."""
         return self.create_user_with_email_and_password(email, password, display_name)
     
     def login_with_google(self, google_access_token: str) -> Optional[Dict[str, Any]]:
-        """Login with Google OAuth token."""
+        """Public method for Google OAuth login."""
         return self.sign_in_with_google_oauth(google_access_token)
     
     def logout(self) -> None:
-        """Logout user."""
+        """Clear user session data."""
         keys_to_remove = ['user', 'user_token', 'chat_history', 'current_session_id', 'google_auth_code']
         for key in keys_to_remove:
             if key in st.session_state:
                 del st.session_state[key]
     
+    # Firestore data management methods
     def save_chat_history(self, user_id: str, chat_history: List[tuple]) -> Optional[str]:
-        """Save user's chat history to Firestore."""
+        """Persist chat session to Firestore."""
         try:
             db = firestore.client()
             doc_ref = db.collection('users').document(user_id).collection('chat_sessions').document()
             
+            # Convert chat history to serializable format
             serializable_history = []
             for question, answer in chat_history:
                 serializable_history.append({
@@ -244,6 +279,7 @@ class AuthService:
                     'timestamp': datetime.now()
                 })
             
+            # Generate session title from first question
             session_title = "New Session"
             if serializable_history:
                 first_question = serializable_history[0]['question']
@@ -263,7 +299,7 @@ class AuthService:
             return None
     
     def get_chat_history(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get user's chat history from Firestore."""
+        """Retrieve user's chat sessions from Firestore."""
         try:
             db = firestore.client()
             docs = db.collection('users').document(user_id).collection('chat_sessions')\
@@ -283,7 +319,7 @@ class AuthService:
             return []
     
     def save_document_metadata(self, user_id: str, filename: str, file_size: int, chunks_count: int) -> Optional[str]:
-        """Save document metadata to Firestore."""
+        """Store document upload metadata in Firestore."""
         try:
             db = firestore.client()
             doc_ref = db.collection('users').document(user_id).collection('documents').document()
@@ -300,7 +336,7 @@ class AuthService:
             return None
     
     def get_user_documents(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get user's document history from Firestore."""
+        """Retrieve user's document upload history."""
         try:
             db = firestore.client()
             docs = db.collection('users').document(user_id).collection('documents')\
@@ -319,7 +355,7 @@ class AuthService:
             return []
     
     def delete_chat_session(self, user_id: str, session_id: str) -> bool:
-        """Delete a specific chat session."""
+        """Remove a specific chat session from Firestore."""
         try:
             db = firestore.client()
             doc_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
@@ -330,12 +366,11 @@ class AuthService:
             return False
     
     def save_document_session(self, user_id: str, session_id: str, filename: str, file_size: int, chunks_count: int, file_hash: str) -> bool:
-        """Save document session with file information."""
+        """Associate document metadata with a chat session."""
         try:
             db = firestore.client()
             session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
             
-            # Update session with document information
             session_ref.update({
                 'document_metadata': {
                     'filename': filename,
@@ -355,7 +390,7 @@ class AuthService:
             return False
 
     def get_session_document_info(self, user_id: str, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get document information for a session."""
+        """Retrieve document metadata for a specific session."""
         try:
             db = firestore.client()
             session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)

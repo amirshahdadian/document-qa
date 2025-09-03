@@ -1,0 +1,66 @@
+{
+  "description": "Test dataset for Italian student document Q&A system",
+  "version": "1.0",
+  "test_cases": [
+    {
+      "id": "eligibility_01",
+      "document_type": "bando_borsa_studio",
+      "question_en": "What are the eligibility criteria for this scholarship?",
+      "question_it": "Quali sono i criteri di eleggibilità per questa borsa di studio?",
+      "expected_answer_elements": [
+        "studente universitario",
+        "iscrizione regolare", 
+        "ISEE",
+        "media accademica"
+      ],
+      "source_content": "I criteri di eleggibilità per la borsa di studio includono: essere studente universitario regolarmente iscritto, avere un ISEE familiare non superiore a 25.000 euro, mantenere una media accademica di almeno 27/30.",
+      "relevance_score": 1.0
+    },
+    {
+      "id": "deadline_01",
+      "document_type": "bando_borsa_studio",
+      "question_en": "When is the application deadline?",
+      "question_it": "Qual è la scadenza per presentare la domanda?",
+      "expected_answer_elements": [
+        "31 marzo 2024",
+        "12:00",
+        "scadenza"
+      ],
+      "source_content": "La scadenza per la presentazione delle domande è fissata al 31 marzo 2024 alle ore 12:00. Non saranno accettate domande presentate dopo tale termine.",
+      "relevance_score": 1.0
+    },
+    {
+      "id": "documents_01", 
+      "document_type": "bando_borsa_studio",
+      "question_en": "What documents are required for the application?",
+      "question_it": "Quali documenti sono necessari per la domanda?",
+      "expected_answer_elements": [
+        "domanda compilata",
+        "ISEE",
+        "certificato iscrizione",
+        "autocertificazione voti"
+      ],
+      "source_content": "I documenti da allegare alla domanda sono: modulo di domanda debitamente compilato, ISEE in corso di validità, certificato di iscrizione all'anno accademico corrente, autocertificazione dei voti conseguiti.",
+      "relevance_score": 1.0
+    },
+    {
+      "id": "amount_01",
+      "document_type": "bando_borsa_studio", 
+      "question_en": "How much is the scholarship worth?",
+      "question_it": "Qual è l'importo della borsa di studio?",
+      "expected_answer_elements": [
+        "5.500 euro",
+        "anno accademico",
+        "importo"
+      ],
+      "source_content": "L'importo della borsa di studio è pari a 5.500 euro per l'intero anno accademico, erogato in due rate semestrali di pari importo.",
+      "relevance_score": 1.0
+    }
+  ],
+  "evaluation_metrics": {
+    "accuracy_threshold": 0.7,
+    "completeness_min_words": 15,
+    "relevance_threshold": 0.8,
+    "hallucination_tolerance": 0.1
+  }
+}

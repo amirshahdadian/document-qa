@@ -11,13 +11,12 @@ from app.utils import (
 import hashlib
 import logging
 
-# Set main logger level
 main_logger = logging.getLogger(__name__)
 if IS_PRODUCTION:
     main_logger.setLevel(logging.ERROR)
 
 def initialize_simple_session_state():
-    """Initialize minimal session state for simple UI."""
+    """Initialize session state variables."""
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "qa_chain" not in st.session_state:
@@ -38,42 +37,42 @@ def initialize_simple_session_state():
         st.session_state.last_processed_code = None
 
 def handle_google_oauth_callback():
-    """Handle Google OAuth callback."""
-    query_params = st.query_params
-    
-    if "code" in query_params and "state" in query_params:
-        if query_params["state"] == "google_auth":
-            auth_code = query_params["code"]
+    """Handle Google OAuth callback and process authentication."""
+    try:
+        query_params = st.query_params
+        main_logger.debug(f"OAUTH_CALLBACK: Received query params: {query_params}")
+
+        if "code" in query_params and "state" in query_params and query_params["state"] == "google_auth":
+            code = query_params["code"]
             
-            # Check if we've already processed this callback
-            if 'last_processed_code' in st.session_state and st.session_state.last_processed_code == auth_code:
-                # Clear query params and return to avoid reprocessing
-                st.query_params.clear()
+            if code == st.session_state.get("last_processed_code"):
+                main_logger.warning("OAUTH_CALLBACK: Ignoring already processed auth code.")
                 return
+
+            main_logger.info(f"OAUTH_CALLBACK: Google OAuth code received: {code[:10]}...")
             
-            with st.spinner("🔐 Signing in with Google..."):
-                # Exchange code for access token
-                access_token = st.session_state.auth_service.exchange_google_code_for_token(auth_code)
+            auth_service = st.session_state.auth_service
+            access_token = auth_service.exchange_google_code_for_token(code)
+            
+            if access_token:
+                main_logger.info("OAUTH_CALLBACK: Google access token obtained successfully.")
+                user_info = auth_service.login_with_google(access_token)
                 
-                if access_token:
-                    # Sign in with Firebase using Google token
-                    user_data = st.session_state.auth_service.login_with_google(access_token)
-                    
-                    if user_data:
-                        st.session_state.user = user_data
-                        st.session_state.last_processed_code = auth_code
-                        logger.debug(f"User session state after login: {st.session_state}")
-                        st.success("✅ Signed in with Google successfully!")
-                        
-                        # Clear query parameters
-                        st.query_params.clear()
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to sign in with Google. Please try again.")
-                        st.query_params.clear()
-                else:
-                    st.error("❌ Failed to authenticate with Google. Please try again.")
+                if user_info:
+                    st.session_state.user = user_info
+                    st.session_state.last_processed_code = code
+                    main_logger.info(f"OAUTH_CALLBACK: User logged in successfully: {user_info.get('email')}")
                     st.query_params.clear()
+                    st.rerun()
+                else:
+                    main_logger.error("OAUTH_CALLBACK: Failed to sign in with Google token.")
+                    st.error("Failed to sign in with Google. Please try again.")
+            else:
+                main_logger.error("OAUTH_CALLBACK: Failed to exchange Google code for access token.")
+                st.error("Authentication failed. Could not retrieve access token from Google.")
+    except Exception as e:
+        main_logger.critical(f"OAUTH_CALLBACK: Unhandled exception in OAuth callback: {e}", exc_info=True)
+        handle_error(e, "A critical error occurred during Google Sign-In.")
 
 def render_auth_section():
     """Render authentication section in main area when not logged in."""
@@ -196,13 +195,11 @@ def render_auth_section():
 def render_chat_sidebar():
     """Render chat history sidebar."""
     with st.sidebar:
-        # New Chat button
         if st.button("➕ New Chat", use_container_width=True, type="primary"):
             start_new_chat()
         
         st.markdown("---")
         
-        # Chat History
         st.markdown("### 💬 Chat History")
         
         if 'user' in st.session_state:
@@ -211,7 +208,6 @@ def render_chat_sidebar():
                 chat_sessions = st.session_state.auth_service.get_chat_history(user_id, limit=20)
                 
                 if chat_sessions:
-                    # Create a scrollable container
                     chat_container = st.container()
                     with chat_container:
                         for session in chat_sessions:
@@ -220,20 +216,13 @@ def render_chat_sidebar():
                             timestamp = session.get('session_timestamp')
                             message_count = session.get('message_count', 0)
                             
-                            # Format timestamp
                             time_str = format_timestamp(timestamp) if timestamp else "Unknown"
-                            
-                            # Truncate title if too long
                             display_title = session_title[:30] + "..." if len(session_title) > 30 else session_title
-                            
-                            # Check if this is the current session
                             is_current = st.session_state.current_session_id == session_id
                             
-                            # Create columns for chat button and delete button
                             col1, col2 = st.columns([4, 1])
                             
                             with col1:
-                                # Create button with session info
                                 button_text = f"📄 {display_title}"
                                 if is_current:
                                     button_text = f"🔹 {display_title}"
@@ -248,7 +237,6 @@ def render_chat_sidebar():
                                     load_chat_session(session)
                             
                             with col2:
-                                # Delete button
                                 if st.button(
                                     "🗑️",
                                     key=f"delete_{session_id}",
@@ -258,7 +246,6 @@ def render_chat_sidebar():
                                 ):
                                     delete_chat_session(session_id, session_title)
                             
-                            # Show session details
                             st.caption(f"🕒 {time_str}")
                             st.markdown("---")
                 else:
@@ -266,7 +253,6 @@ def render_chat_sidebar():
         
         st.markdown("---")
         
-        # Settings dropdown
         with st.expander("⚙️ Settings"):
             # Model selection
             model = st.selectbox(
@@ -276,14 +262,12 @@ def render_chat_sidebar():
                 help="Choose the AI model for processing"
             )
             
-            # Temperature setting
             temperature = st.slider(
                 "Response Style:",
                 0.0, 1.0, 0.1, 0.1,
                 help="0 = Factual, 1 = Creative"
             )
         
-        # User info
         if 'user' in st.session_state:
             st.markdown("---")
             user_email = st.session_state.user.get('email', 'User')
@@ -294,7 +278,6 @@ def render_chat_sidebar():
 
 def start_new_chat():
     """Start a new chat session."""
-    # Reset session state for new chat
     st.session_state.messages = []
     st.session_state.qa_chain = None
     st.session_state.document_processed = False
@@ -306,15 +289,12 @@ def start_new_chat():
 def load_chat_session(session):
     """Load a previous chat session with document embeddings."""
     try:
-        # Load session data
         st.session_state.current_session_id = session.get('id')
         st.session_state.current_session_title = session.get('session_title', 'Untitled Chat')
         
-        # Load chat history
         saved_history = session.get('chat_history', [])
         messages = []
         
-        # Convert chat history to messages format
         for item in saved_history:
             if isinstance(item, dict):
                 messages.append({"role": "user", "content": item.get('question', '')})
@@ -326,36 +306,28 @@ def load_chat_session(session):
         
         st.session_state.messages = messages
         
-        # Try to load existing document embeddings
         user_id = st.session_state.user.get('localId')
         session_id = st.session_state.current_session_id
         
         if user_id and session_id:
-            # Get document info
             doc_info = st.session_state.auth_service.get_session_document_info(user_id, session_id)
             
-            # Initialize QA pipeline
             qa_pipeline = QAPipeline()
             
-            # Debug: List available collections
             if not IS_PRODUCTION:
                 collections = qa_pipeline.list_collections()
                 main_logger.info(f"Available collections: {collections}")
                 collection_info = qa_pipeline.get_collection_info(user_id, session_id)
                 main_logger.info(f"Collection info for session: {collection_info}")
             
-            # Try to load vector store regardless of document info
             vector_store = qa_pipeline.load_vector_store(user_id, session_id)
             
             if vector_store:
-                # Setup QA chain
                 qa_chain = qa_pipeline.setup_qa_chain(vector_store)
                 
-                # Update session state
                 st.session_state.qa_chain = qa_chain
                 st.session_state.document_processed = True
                 
-                # Get document name from doc_info or session data
                 document_name = None
                 if doc_info:
                     document_name = doc_info.get('filename')
@@ -364,7 +336,6 @@ def load_chat_session(session):
                 
                 st.session_state.current_document = document_name
                 
-                # Add success message
                 st.session_state.messages.append({
                     "role": "system",
                     "content": f"📄 **Chat session loaded!** Document **{document_name}** is ready for questions."
@@ -372,12 +343,10 @@ def load_chat_session(session):
                 
                 show_success(f"Loaded chat session with document: {document_name}")
             else:
-                # Vector store not found, clear document state
                 st.session_state.qa_chain = None
                 st.session_state.document_processed = False
                 st.session_state.current_document = None
                 
-                # Check if we have document metadata but missing embeddings
                 if doc_info and doc_info.get('has_embeddings', False):
                     st.session_state.messages.append({
                         "role": "system", 
@@ -398,7 +367,6 @@ def load_chat_session(session):
 def sign_out_user():
     """Sign out the current user."""
     st.session_state.auth_service.logout()
-    # Clear all session state except auth_service
     for key in list(st.session_state.keys()):
         if key not in ['auth_service']:
             del st.session_state[key]
@@ -438,11 +406,9 @@ def render_document_upload():
                     if st.button("🚀 Process Document", type="primary", use_container_width=True):
                         process_document(uploaded_file)
         
-        # Show example questions while waiting
         if not uploaded_file:
             render_example_questions()
     else:
-        # Show current document info
         col1, col2 = st.columns([3, 1])
         
         with col1:
@@ -456,22 +422,17 @@ def process_document(uploaded_file):
     """Process the uploaded document and create/update session."""
     try:
         with st.spinner("🔍 Processing your document... This may take a moment."):
-            # Initialize processors
             pdf_processor = PDFProcessor()
             qa_pipeline = QAPipeline()
             
-            # Generate file hash for deduplication
             file_content = uploaded_file.getvalue()
             file_hash = hashlib.sha256(file_content).hexdigest()
             
-            # Process PDF
             chunks = pdf_processor.load_and_process_pdf(uploaded_file)
             
-            # Get user info
             user_id = st.session_state.user.get('localId')
             session_id = st.session_state.current_session_id
             
-            # Create new session if needed
             if not session_id:
                 timestamp = datetime.now().strftime("%m/%d %H:%M")
                 session_title = f"{uploaded_file.name} - {timestamp}"
@@ -479,30 +440,24 @@ def process_document(uploaded_file):
                 st.session_state.current_session_id = session_id
                 st.session_state.current_session_title = session_title
             
-            # Create and persist vector store
             vector_store = qa_pipeline.create_vector_store(chunks, user_id, session_id)
             
-            # Verify the vector store was created properly
             collection_info = qa_pipeline.get_collection_info(user_id, session_id)
             if not collection_info.get('exists') or collection_info.get('count', 0) == 0:
                 raise ValueError("Vector store was not created properly")
             
-            # Setup QA chain
             qa_chain = qa_pipeline.setup_qa_chain(vector_store)
             
-            # Update session state
             st.session_state.qa_chain = qa_chain
             st.session_state.document_processed = True
             st.session_state.current_document = uploaded_file.name
             
-            # Save document session info with enhanced metadata
             if user_id and session_id:
                 st.session_state.auth_service.save_document_session(
                     user_id, session_id, uploaded_file.name, 
                     uploaded_file.size, len(chunks), file_hash
                 )
                 
-                # Also update the chat session with document info
                 from firebase_admin import firestore
                 db = firestore.client()
                 session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
@@ -511,7 +466,6 @@ def process_document(uploaded_file):
                     'updated_at': datetime.now()
                 })
             
-            # Add system message
             st.session_state.messages.append({
                 "role": "system",
                 "content": f"Document **{uploaded_file.name}** has been processed and saved! You can now ask questions about it."
@@ -519,7 +473,6 @@ def process_document(uploaded_file):
             
             show_success("✅ Document processed and saved successfully!")
             
-            # Debug info in development
             if not IS_PRODUCTION:
                 main_logger.info(f"Document processed: {collection_info}")
             
@@ -556,7 +509,6 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
         from firebase_admin import firestore
         db = firestore.client()
         
-        # Get current session
         session_ref = db.collection('users').document(user_id).collection('chat_sessions').document(session_id)
         session_doc = session_ref.get()
         
@@ -564,7 +516,6 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
             session_data = session_doc.to_dict()
             current_history = session_data.get('chat_history', [])
             
-            # Add new message
             new_message = {
                 'question': question,
                 'answer': answer,
@@ -572,7 +523,6 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
             }
             current_history.append(new_message)
             
-            # Update session with retry logic
             for attempt in range(3):
                 try:
                     session_ref.update({
@@ -580,7 +530,6 @@ def auto_save_message(user_id: str, session_id: str, question: str, answer: str)
                         'message_count': len(current_history),
                         'updated_at': datetime.now()
                     })
-                    # Replace excessive logging
                     if not IS_PRODUCTION:
                         main_logger.info(f"Auto-saved message for session {session_id}")
                     return True
@@ -625,11 +574,9 @@ def render_chat_interface():
     """Render the chat interface."""
     st.markdown("### 💬 Chat")
     
-    # Create chat container
     chat_container = st.container()
     
     with chat_container:
-        # Display chat messages
         for msg_idx, message in enumerate(st.session_state.messages):
             if message["role"] == "user":
                 with st.chat_message("user"):
@@ -637,7 +584,6 @@ def render_chat_interface():
             elif message["role"] == "assistant":
                 with st.chat_message("assistant"):
                     st.write(message["content"])
-                    # Show sources if available
                     if "sources" in message:
                         with st.expander("📖 View Sources"):
                             for i, source in enumerate(message["sources"][:3]):
@@ -653,9 +599,7 @@ def render_chat_interface():
             elif message["role"] == "system":
                 st.info(message["content"])
     
-    # Only show quick actions if document is processed
     if st.session_state.document_processed and st.session_state.qa_chain:
-        # Quick action buttons
         st.markdown("### 🚀 Quick Actions")
         col1, col2, col3 = st.columns(3)
         
@@ -673,13 +617,11 @@ def render_chat_interface():
     elif st.session_state.messages and not st.session_state.document_processed:
         st.info("💡 Upload a document above to activate AI features and quick actions.")
     
-    # Chat input - always show but handle appropriately
     if prompt := st.chat_input("Ask a question about your document..."):
         handle_user_input(prompt)
 
 def handle_quick_action(prompt):
     """Handle quick action button clicks."""
-    # Check if QA chain is available
     if not st.session_state.qa_chain:
         st.warning("⚠️ Please upload a document first to use quick actions.")
         return
@@ -690,19 +632,13 @@ def handle_quick_action(prompt):
 
 def handle_user_input(prompt):
     """Handle user input from chat."""
-    # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # Process the question
     process_question(prompt)
-    
-    # Rerun to show the response
     st.rerun()
 
 def process_question(question):
     """Process a question and add response to messages."""
     try:
-        # Check if QA chain is available
         if not st.session_state.qa_chain:
             error_message = "⚠️ Please upload a document first to activate the AI assistant. The document needs to be processed before I can answer questions."
             st.session_state.messages.append({
@@ -715,19 +651,16 @@ def process_question(question):
             qa_pipeline = QAPipeline()
             result = qa_pipeline.ask_question(st.session_state.qa_chain, question)
             
-            # Add assistant response
             assistant_message = {
                 "role": "assistant",
                 "content": result["answer"]
             }
             
-            # Add sources if available
             if result.get("source_documents"):
                 assistant_message["sources"] = result["source_documents"]
             
             st.session_state.messages.append(assistant_message)
             
-            # Auto-save to Firestore
             if 'user' in st.session_state and st.session_state.current_session_id:
                 user_id = st.session_state.user.get('localId')
                 auto_save_message(user_id, st.session_state.current_session_id, question, result["answer"])
@@ -744,14 +677,11 @@ def delete_chat_session(session_id: str, session_title: str):
     try:
         user_id = st.session_state.user.get('localId')
         if user_id:
-            # Delete vector store
             qa_pipeline = QAPipeline()
             qa_pipeline.delete_vector_store(user_id, session_id)
             
-            # Delete from Firestore
             success = st.session_state.auth_service.delete_chat_session(user_id, session_id)
             if success:
-                # If we're deleting the current session, start a new chat
                 if st.session_state.current_session_id == session_id:
                     start_new_chat()
                 else:
@@ -764,7 +694,6 @@ def delete_chat_session(session_id: str, session_title: str):
 
 def main():
     """Main application function."""
-    # Page config
     st.set_page_config(
         page_title="Italian Student Document Assistant",
         page_icon="🇮🇹",
@@ -772,7 +701,6 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Custom CSS for better UI
     st.markdown("""
     <style>
     .main > div {
@@ -795,7 +723,6 @@ def main():
         padding-left: 20px;
         padding-right: 20px;
     }
-    /* Sidebar scrollable area */
     .css-1d391kg {
         max-height: 70vh;
         overflow-y: auto;
@@ -803,30 +730,22 @@ def main():
     </style>
     """, unsafe_allow_html=True)
     
-    # Validate configuration
     if not validate_config():
         st.error("❌ Configuration validation failed. Please check your environment variables.")
         return
     
-    # Initialize session state
     initialize_simple_session_state()
-    
-    # Handle Google OAuth callback
     handle_google_oauth_callback()
     
-    # Check if user is logged in
     if 'user' not in st.session_state:
-        # Show authentication interface
         render_auth_section()
         return
     
-    # User is logged in - show main app
     render_chat_sidebar()
     render_header()
     render_document_upload()
     render_chat_interface()
     
-    # Footer
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 1rem;">

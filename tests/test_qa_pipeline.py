@@ -12,13 +12,13 @@ class TestQAPipeline:
         mock_embeddings.assert_called_once()
     
     def test_create_vector_store_empty_chunks(self, mock_env_vars):
-        """Test vector store creation fails with empty chunks."""
+        """Test vector store creation with empty chunks raises ValueError."""
         qa_pipeline = QAPipeline()
         with pytest.raises(ValueError, match="No document chunks provided"):
-            qa_pipeline.create_vector_store([])
+            qa_pipeline.create_vector_store([], "test_user", "test_session")
     
     def test_ask_question_empty_question(self, mock_env_vars):
-        """Test asking empty question fails."""
+        """Test asking an empty question raises ValueError."""
         qa_pipeline = QAPipeline()
         mock_qa_chain = Mock()
         

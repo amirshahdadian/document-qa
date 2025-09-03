@@ -10,6 +10,8 @@ from app.config import MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP, TEXT_SEPARATORS
 logger = logging.getLogger(__name__)
 
 class PDFProcessor:
+    """Handles PDF loading, validation, and text chunking."""
+
     def __init__(self):
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
@@ -28,30 +30,24 @@ class PDFProcessor:
         return True
     
     def load_and_process_pdf(self, pdf_file) -> List[Document]:
-        """Load and process PDF file into chunks."""
+        """Load PDF, split into chunks, and add metadata."""
         try:
-            # Validate file
             self.validate_file(pdf_file)
             
-            # Save uploaded file to temporary location
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                 tmp_file.write(pdf_file.getvalue())
                 tmp_path = tmp_file.name
             
-            # Load PDF
             loader = PyPDFLoader(tmp_path)
             documents = loader.load()
             
             if not documents:
                 raise ValueError("No content found in PDF")
             
-            # Split into chunks
             chunks = self.text_splitter.split_documents(documents)
             
-            # Clean up temp file
             os.unlink(tmp_path)
             
-            # Add metadata
             for i, chunk in enumerate(chunks):
                 chunk.metadata.update({
                     'source_file': pdf_file.name,
@@ -64,7 +60,6 @@ class PDFProcessor:
             
         except Exception as e:
             logger.error(f"Error processing PDF: {str(e)}")
-            # Clean up temp file if it exists
             if 'tmp_path' in locals():
                 try:
                     os.unlink(tmp_path)

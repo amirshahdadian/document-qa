@@ -37,7 +37,6 @@ class QAPipeline:
     
     def generate_collection_name(self, user_id: str, session_id: str) -> str:
         """Generate a unique collection name for user session."""
-        # Use a more predictable naming scheme
         safe_user_id = hashlib.md5(user_id.encode()).hexdigest()[:8]
         safe_session_id = hashlib.md5(session_id.encode()).hexdigest()[:8]
         collection_name = f"{CHROMA_COLLECTION_PREFIX}_{safe_user_id}_{safe_session_id}"

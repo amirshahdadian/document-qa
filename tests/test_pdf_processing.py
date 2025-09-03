@@ -10,7 +10,7 @@ class TestPDFProcessor:
         assert processor.validate_file(mock_pdf_file) is True
     
     def test_validate_file_size_limit(self):
-        """Test file size validation fails for large files."""
+        """Test file size validation for files exceeding limit."""
         processor = PDFProcessor()
         mock_file = Mock()
         mock_file.name = "large.pdf"
@@ -20,7 +20,7 @@ class TestPDFProcessor:
             processor.validate_file(mock_file)
     
     def test_validate_file_wrong_type(self):
-        """Test file type validation fails for non-PDF files."""
+        """Test file type validation for non-PDF files."""
         processor = PDFProcessor()
         mock_file = Mock()
         mock_file.name = "document.txt"

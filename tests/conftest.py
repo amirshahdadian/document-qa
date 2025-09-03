@@ -13,7 +13,7 @@ def mock_env_vars():
         'FIREBASE_STORAGE_BUCKET': 'test.appspot.com',
         'FIREBASE_MESSAGING_SENDER_ID': '123456789',
         'FIREBASE_APP_ID': '1:123456789:web:abcdef',
-        'FIREBASE_SERVICE_ACCOUNT_KEY': 'dGVzdA=='  # base64 encoded 'test'
+        'FIREBASE_SERVICE_ACCOUNT_KEY': 'dGVzdA=='
     }):
         yield
 
@@ -22,6 +22,6 @@ def mock_pdf_file():
     """Create a mock PDF file for testing."""
     mock_file = Mock()
     mock_file.name = "test.pdf"
-    mock_file.size = 1024 * 1024  # 1MB
+    mock_file.size = 1024 * 1024
     mock_file.getvalue.return_value = b"mock pdf content"
     return mock_file

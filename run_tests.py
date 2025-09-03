@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced test runner script with ML accuracy tests
+Test runner script with ML accuracy tests.
 Usage: python run_tests.py
 """
 
@@ -12,11 +12,9 @@ from pathlib import Path
 def run_tests():
     """Run all tests including ML accuracy tests."""
     try:
-        # Change to project directory
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         
         print("Running unit tests...")
-        # Run pytest with specific test files
         cmd = [
             sys.executable, "-m", "pytest", 
             "tests/",
@@ -33,7 +31,6 @@ def run_tests():
         else:
             print("❌ Unit tests FAILED")
         
-        # Run evaluation if unit tests pass
         if unit_tests_passed:
             print("\nRunning ML evaluation...")
             try:

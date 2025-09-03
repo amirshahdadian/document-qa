@@ -44,10 +44,10 @@ def initialize_session_state() -> None:
         if key not in st.session_state:
             st.session_state[key] = default_value
 
-def handle_error(error: Exception, message: str) -> None:
-    """Handle errors with logging and user feedback."""
-    logger.error(f"{message}: {str(error)}")
-    st.error(f"❌ {message}: {str(error)}")
+def handle_error(e: Exception, message: str = "An error occurred.") -> None:
+    """Handle and display errors in a standardized way."""
+    logger.error(f"{message}: {e}", exc_info=True)
+    st.error(message)
 
 def show_success(message: str) -> None:
     """Show success message with logging."""
@@ -80,53 +80,13 @@ def truncate_text(text: str, max_length: int = 50) -> str:
 
 def cleanup_session_state():
     """Clean up old session state data to prevent memory issues."""
-    # Remove old processed auth codes (keep only last 10)
+    # Remove old processed auth codes, keeping only the last 10
     if 'processed_auth_codes' in st.session_state:
         if len(st.session_state.processed_auth_codes) > 10:
             codes_list = list(st.session_state.processed_auth_codes)
             st.session_state.processed_auth_codes = set(codes_list[-10:])
     
-    # Limit chat messages to prevent memory issues (keep last 50)
+    # Limit chat messages to last 50 to prevent memory issues
     if 'messages' in st.session_state:
         if len(st.session_state.messages) > 50:
             st.session_state.messages = st.session_state.messages[-50:]
-
-def debug_chroma_collections():
-    """Debug function to list ChromaDB collections."""
-    if not IS_PRODUCTION:
-        try:
-            from app.qa_pipeline import QAPipeline
-            qa_pipeline = QAPipeline()
-            collections = qa_pipeline.list_collections()
-            logger.info(f"Available ChromaDB collections: {collections}")
-            return collections
-        except Exception as e:
-            logger.error(f"Error debugging collections: {e}")
-            return []
-    return []
-
-def cleanup_old_vector_stores(auth_service, user_id: str, days_old: int = 30):
-    """Clean up old vector stores that haven't been accessed recently."""
-    try:
-        from datetime import datetime, timedelta
-        from app.qa_pipeline import QAPipeline
-        
-        # Get user's chat sessions
-        sessions = auth_service.get_chat_history(user_id, limit=100)
-        cutoff_date = datetime.now() - timedelta(days=days_old)
-        
-        qa_pipeline = QAPipeline()
-        cleaned_count = 0
-        
-        for session in sessions:
-            session_timestamp = session.get('session_timestamp')
-            if session_timestamp and session_timestamp < cutoff_date:
-                session_id = session.get('id')
-                if qa_pipeline.delete_vector_store(user_id, session_id):
-                    cleaned_count += 1
-        
-        logger.info(f"Cleaned up {cleaned_count} old vector stores for user {user_id}")
-        return cleaned_count
-    except Exception as e:
-        logger.error(f"Error cleaning up vector stores: {e}")
-        return 0
