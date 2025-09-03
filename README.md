@@ -207,6 +207,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## 👤 Authors
 
-**Amir Shahdadian**
-**Mahtab Taheri**
-**Mohammad Ali Yazdani**
+- **Amir Shahdadian**
+- **Mahtab Taheri**
+- **Mohammad Ali Yazdani**
