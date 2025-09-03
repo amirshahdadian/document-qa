@@ -66,30 +66,3 @@ class PDFProcessor:
                 except:
                     pass
             raise e
-    
-    def extract_text_preview(self, pdf_file, max_chars: int = 500) -> str:
-        """Extract a text preview from the PDF."""
-        try:
-            chunks = self.load_and_process_pdf(pdf_file)
-            if chunks:
-                preview = chunks[0].page_content[:max_chars]
-                return preview + "..." if len(chunks[0].page_content) > max_chars else preview
-            return "No text found in PDF"
-        except Exception as e:
-            logger.error(f"Error extracting preview: {str(e)}")
-            return "Error extracting preview"
-    
-    def get_document_stats(self, chunks: List[Document]) -> dict:
-        """Get statistics about the processed document."""
-        if not chunks:
-            return {}
-        
-        total_chars = sum(len(chunk.page_content) for chunk in chunks)
-        avg_chunk_size = total_chars / len(chunks) if chunks else 0
-        
-        return {
-            'total_chunks': len(chunks),
-            'total_characters': total_chars,
-            'average_chunk_size': avg_chunk_size,
-            'source_file': chunks[0].metadata.get('source_file', 'Unknown')
-        }

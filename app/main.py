@@ -5,7 +5,7 @@ from app.auth import AuthService
 from app.pdf_processing import PDFProcessor
 from app.qa_pipeline import QAPipeline
 from app.utils import (
-    initialize_session_state, format_file_size, handle_error, 
+    format_file_size, handle_error, 
     show_success, show_info, show_warning, format_timestamp
 )
 import hashlib

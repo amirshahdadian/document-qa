@@ -290,11 +290,3 @@ class QAPipeline:
         except Exception as e:
             logger.error(f"Error getting collection info: {str(e)}")
             return {"exists": False, "error": str(e)}
-    
-    def get_similar_documents(self, vector_store: Chroma, query: str, k: int = 3) -> List[Document]:
-        """Get similar documents for testing purposes."""
-        try:
-            return vector_store.similarity_search(query, k=k)
-        except Exception as e:
-            logger.error(f"Error getting similar documents: {str(e)}")
-            return []

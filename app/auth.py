@@ -263,97 +263,6 @@ class AuthService:
             if key in st.session_state:
                 del st.session_state[key]
     
-    # Firestore data management methods
-    def save_chat_history(self, user_id: str, chat_history: List[tuple]) -> Optional[str]:
-        """Persist chat session to Firestore."""
-        try:
-            db = firestore.client()
-            doc_ref = db.collection('users').document(user_id).collection('chat_sessions').document()
-            
-            # Convert chat history to serializable format
-            serializable_history = []
-            for question, answer in chat_history:
-                serializable_history.append({
-                    'question': str(question),
-                    'answer': str(answer),
-                    'timestamp': datetime.now()
-                })
-            
-            # Generate session title from first question
-            session_title = "New Session"
-            if serializable_history:
-                first_question = serializable_history[0]['question']
-                session_title = first_question[:50] + "..." if len(first_question) > 50 else first_question
-            
-            doc_ref.set({
-                'chat_history': serializable_history,
-                'session_timestamp': datetime.now(),
-                'session_id': doc_ref.id,
-                'message_count': len(serializable_history),
-                'session_title': session_title
-            })
-            logger.debug(f"Chat history saved for user {user_id}: {serializable_history}")
-            return doc_ref.id
-        except Exception as e:
-            logger.error(f"Failed to save chat history: {e}")
-            return None
-    
-    def get_chat_history(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Retrieve user's chat sessions from Firestore."""
-        try:
-            db = firestore.client()
-            docs = db.collection('users').document(user_id).collection('chat_sessions')\
-                    .order_by('session_timestamp', direction=firestore.Query.DESCENDING)\
-                    .limit(limit)\
-                    .stream()
-            
-            chat_sessions = []
-            for doc in docs:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                chat_sessions.append(data)
-            
-            return chat_sessions
-        except Exception as e:
-            logger.error(f"Failed to get chat history: {e}")
-            return []
-    
-    def save_document_metadata(self, user_id: str, filename: str, file_size: int, chunks_count: int) -> Optional[str]:
-        """Store document upload metadata in Firestore."""
-        try:
-            db = firestore.client()
-            doc_ref = db.collection('users').document(user_id).collection('documents').document()
-            doc_ref.set({
-                'filename': filename,
-                'file_size': file_size,
-                'chunks_count': chunks_count,
-                'upload_timestamp': datetime.now(),
-                'document_id': doc_ref.id
-            })
-            return doc_ref.id
-        except Exception as e:
-            logger.error(f"Failed to save document metadata: {e}")
-            return None
-    
-    def get_user_documents(self, user_id: str) -> List[Dict[str, Any]]:
-        """Retrieve user's document upload history."""
-        try:
-            db = firestore.client()
-            docs = db.collection('users').document(user_id).collection('documents')\
-                    .order_by('upload_timestamp', direction=firestore.Query.DESCENDING)\
-                    .stream()
-            
-            documents = []
-            for doc in docs:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                documents.append(data)
-            
-            return documents
-        except Exception as e:
-            logger.error(f"Failed to get user documents: {e}")
-            return []
-    
     def delete_chat_session(self, user_id: str, session_id: str) -> bool:
         """Remove a specific chat session from Firestore."""
         try:
@@ -403,3 +312,26 @@ class AuthService:
         except Exception as e:
             logger.error(f"Failed to get session document info: {e}")
             return None
+
+    def get_chat_history(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Retrieve chat history for a user from Firestore."""
+        try:
+            db = firestore.client()
+            sessions_ref = db.collection('users').document(user_id).collection('chat_sessions')
+            
+            # Order by updated_at descending to get most recent first
+            query = sessions_ref.order_by('updated_at', direction=firestore.Query.DESCENDING).limit(limit)
+            docs = query.stream()
+            
+            chat_sessions = []
+            for doc in docs:
+                session_data = doc.to_dict()
+                session_data['id'] = doc.id  # Add document ID
+                chat_sessions.append(session_data)
+            
+            logger.info(f"Retrieved {len(chat_sessions)} chat sessions for user {user_id}")
+            return chat_sessions
+            
+        except Exception as e:
+            logger.error(f"Failed to get chat history for user {user_id}: {e}")
+            return []

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test runner script with ML accuracy tests.
+Test runner script for the Document QA application.
 Usage: python run_tests.py
 """
 
@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 def run_tests():
-    """Run all tests including ML accuracy tests."""
+    """Run all tests including evaluation."""
     try:
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         
@@ -32,7 +32,7 @@ def run_tests():
             print("❌ Unit tests FAILED")
         
         if unit_tests_passed:
-            print("\nRunning ML evaluation...")
+            print("\nRunning evaluation...")
             try:
                 eval_script = Path("evaluation/run_evaluation.py")
                 if eval_script.exists():
@@ -41,16 +41,16 @@ def run_tests():
                     eval_passed = eval_result.returncode == 0
                     
                     if eval_passed:
-                        print("✅ ML evaluation PASSED")
+                        print("✅ Evaluation PASSED")
                     else:
-                        print("❌ ML evaluation FAILED")
+                        print("❌ Evaluation FAILED")
                     
                     return unit_tests_passed and eval_passed
                 else:
-                    print("⚠️ ML evaluation script not found, skipping...")
+                    print("⚠️ Evaluation script not found, skipping...")
                     return unit_tests_passed
             except Exception as e:
-                print(f"⚠️ Error running ML evaluation: {e}")
+                print(f"⚠️ Error running evaluation: {e}")
                 return unit_tests_passed
         
         return unit_tests_passed

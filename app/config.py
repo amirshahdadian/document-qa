@@ -159,34 +159,6 @@ def validate_config():
         logger.info("Configuration validated successfully")
     return True
 
-def validate_gcs_config():
-    """
-    Validate Google Cloud Storage configuration for production.
-    
-    Returns:
-        bool: True if GCS is properly configured
-    """
-    if IS_PRODUCTION:
-        if not GCS_BUCKET_NAME:
-            logger.error("GCS_BUCKET_NAME is required for production deployment")
-            return False
-        
-        try:
-            from google.cloud import storage
-            from google.auth import default
-            
-            credentials, project = default()
-            client = storage.Client(credentials=credentials, project=project)
-            bucket = client.bucket(GCS_BUCKET_NAME)
-            
-            bucket.exists()
-            logger.info(f"GCS bucket '{GCS_BUCKET_NAME}' is accessible")
-            return True
-        except Exception as e:
-            logger.error(f"GCS configuration validation failed: {e}")
-            return False
-    return True
-
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
