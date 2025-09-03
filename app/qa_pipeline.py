@@ -86,8 +86,13 @@ class QAPipeline:
             # Upload to GCS for persistence across deployments
             collection_local_path = self._get_collection_local_path(user_id, session_id)
             if os.path.exists(collection_local_path):
-                self.gcs_storage.upload_chroma_collection(collection_local_path, user_id, session_id)
-                logger.info(f"Uploaded vector store to GCS for user {user_id}, session {session_id}")
+                upload_success = self.gcs_storage.upload_chroma_collection(collection_local_path, user_id, session_id)
+                if upload_success:
+                    logger.info(f"Successfully uploaded vector store to GCS for user {user_id}, session {session_id}")
+                else:
+                    logger.warning(f"Failed to upload vector store to GCS for user {user_id}, session {session_id}")
+            else:
+                logger.warning(f"Collection local path not found for GCS upload: {collection_local_path}")
             
             return vector_store
         except Exception as e:
@@ -182,8 +187,8 @@ class QAPipeline:
                     logger.info(f"Deleted local vector store '{collection_name}'")
             except Exception as e:
                 if not IS_PRODUCTION:
-                    logger.warning(f"Failed to delete local collection '{collection_name}': {e}")
-                success = False
+                    logger.info(f"Local collection '{collection_name}' not found (this is normal): {e}")
+               
             
             # Delete local files
             if os.path.exists(collection_local_path):

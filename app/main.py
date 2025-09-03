@@ -21,6 +21,8 @@ def initialize_simple_session_state():
         st.session_state.messages = []
     if "qa_chain" not in st.session_state:
         st.session_state.qa_chain = None
+    if "qa_pipeline" not in st.session_state:
+        st.session_state.qa_pipeline = QAPipeline()
     if "document_processed" not in st.session_state:
         st.session_state.document_processed = False
     if "current_document" not in st.session_state:
@@ -40,8 +42,13 @@ def handle_google_oauth_callback():
     """Handle Google OAuth callback and process authentication."""
     try:
         query_params = st.query_params
+        
+        # Only process if we actually have OAuth parameters
+        if not query_params or "code" not in query_params:
+            return
+            
         main_logger.debug(f"OAUTH_CALLBACK: Received query params: {query_params}")
-
+        
         if "code" in query_params and "state" in query_params and query_params["state"] == "google_auth":
             code = query_params["code"]
             
@@ -194,87 +201,99 @@ def render_auth_section():
 
 def render_chat_sidebar():
     """Render chat history sidebar."""
-    with st.sidebar:
-        if st.button("➕ New Chat", use_container_width=True, type="primary"):
-            start_new_chat()
+    try:
+        user_id = st.session_state.user.get('localId')
         
-        st.markdown("---")
+        # Cache chat sessions to avoid repeated API calls
+        if 'cached_chat_sessions' not in st.session_state or st.session_state.get('refresh_chat_cache', False):
+            st.session_state.cached_chat_sessions = st.session_state.auth_service.get_chat_history(user_id, limit=20)
+            st.session_state.refresh_chat_cache = False
         
-        st.markdown("### 💬 Chat History")
+        chat_sessions = st.session_state.cached_chat_sessions
         
-        if 'user' in st.session_state:
-            user_id = st.session_state.user.get('localId')
-            if user_id:
-                chat_sessions = st.session_state.auth_service.get_chat_history(user_id, limit=20)
-                
-                if chat_sessions:
-                    chat_container = st.container()
-                    with chat_container:
-                        for session in chat_sessions:
-                            session_id = session.get('id')
-                            session_title = session.get('session_title', 'Untitled Chat')
-                            timestamp = session.get('session_timestamp')
-                            message_count = session.get('message_count', 0)
-                            
-                            time_str = format_timestamp(timestamp) if timestamp else "Unknown"
-                            display_title = session_title[:30] + "..." if len(session_title) > 30 else session_title
-                            is_current = st.session_state.current_session_id == session_id
-                            
-                            col1, col2 = st.columns([4, 1])
-                            
-                            with col1:
-                                button_text = f"📄 {display_title}"
-                                if is_current:
-                                    button_text = f"🔹 {display_title}"
-                                
-                                if st.button(
-                                    button_text,
-                                    key=f"chat_{session_id}",
-                                    help=f"{time_str} • {message_count} messages",
-                                    use_container_width=True,
-                                    disabled=is_current
-                                ):
-                                    load_chat_session(session)
-                            
-                            with col2:
-                                if st.button(
-                                    "🗑️",
-                                    key=f"delete_{session_id}",
-                                    help="Delete this chat session",
-                                    use_container_width=True,
-                                    type="secondary"
-                                ):
-                                    delete_chat_session(session_id, session_title)
-                            
-                            st.caption(f"🕒 {time_str}")
-                            st.markdown("---")
-                else:
-                    st.info("No previous chats found")
-        
-        st.markdown("---")
-        
-        with st.expander("⚙️ Settings"):
-            # Model selection
-            model = st.selectbox(
-                "AI Model:",
-                AVAILABLE_MODELS,
-                index=0,
-                help="Choose the AI model for processing"
-            )
+        with st.sidebar:
+            if st.button("➕ New Chat", use_container_width=True, type="primary"):
+                start_new_chat()
             
-            temperature = st.slider(
-                "Response Style:",
-                0.0, 1.0, 0.1, 0.1,
-                help="0 = Factual, 1 = Creative"
-            )
-        
-        if 'user' in st.session_state:
             st.markdown("---")
-            user_email = st.session_state.user.get('email', 'User')
-            st.caption(f"👤 {user_email}")
             
-            if st.button("🚪 Sign Out", use_container_width=True, type="secondary"):
-                sign_out_user()
+            st.markdown("### 💬 Chat History")
+            
+            if 'user' in st.session_state:
+                user_id = st.session_state.user.get('localId')
+                if user_id:
+                    chat_sessions = st.session_state.auth_service.get_chat_history(user_id, limit=20)
+                    
+                    if chat_sessions:
+                        chat_container = st.container()
+                        with chat_container:
+                            for session in chat_sessions:
+                                session_id = session.get('id')
+                                session_title = session.get('session_title', 'Untitled Chat')
+                                timestamp = session.get('session_timestamp')
+                                message_count = session.get('message_count', 0)
+                                
+                                time_str = format_timestamp(timestamp) if timestamp else "Unknown"
+                                display_title = session_title[:30] + "..." if len(session_title) > 30 else session_title
+                                is_current = st.session_state.current_session_id == session_id
+                                
+                                col1, col2 = st.columns([4, 1])
+                                
+                                with col1:
+                                    button_text = f"📄 {display_title}"
+                                    if is_current:
+                                        button_text = f"🔹 {display_title}"
+                                    
+                                    if st.button(
+                                        button_text,
+                                        key=f"chat_{session_id}",
+                                        help=f"{time_str} • {message_count} messages",
+                                        use_container_width=True,
+                                        disabled=is_current
+                                    ):
+                                        load_chat_session(session)
+                                
+                                with col2:
+                                    if st.button(
+                                        "🗑️",
+                                        key=f"delete_{session_id}",
+                                        help="Delete this chat session",
+                                        use_container_width=True,
+                                        type="secondary"
+                                    ):
+                                        delete_chat_session(session_id, session_title)
+                                
+                                st.caption(f"🕒 {time_str}")
+                                st.markdown("---")
+                    else:
+                        st.info("No previous chats found")
+            
+            st.markdown("---")
+            
+            with st.expander("⚙️ Settings"):
+                # Model selection
+                model = st.selectbox(
+                    "AI Model:",
+                    AVAILABLE_MODELS,
+                    index=0,
+                    help="Choose the AI model for processing"
+                )
+                
+                temperature = st.slider(
+                    "Response Style:",
+                    0.0, 1.0, 0.1, 0.1,
+                    help="0 = Factual, 1 = Creative"
+                )
+            
+            if 'user' in st.session_state:
+                st.markdown("---")
+                user_email = st.session_state.user.get('email', 'User')
+                st.caption(f"👤 {user_email}")
+                
+                if st.button("🚪 Sign Out", use_container_width=True, type="secondary"):
+                    sign_out_user()
+    except Exception as e:
+        handle_error(e, "Error rendering chat sidebar")
 
 def start_new_chat():
     """Start a new chat session."""
@@ -423,7 +442,7 @@ def process_document(uploaded_file):
     try:
         with st.spinner("🔍 Processing your document... This may take a moment."):
             pdf_processor = PDFProcessor()
-            qa_pipeline = QAPipeline()
+            qa_pipeline = st.session_state.qa_pipeline
             
             file_content = uploaded_file.getvalue()
             file_hash = hashlib.sha256(file_content).hexdigest()
