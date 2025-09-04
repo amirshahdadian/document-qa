@@ -46,43 +46,36 @@ class QAPipeline:
         """Get local path for collection storage."""
         collection_name = self.generate_collection_name(user_id, session_id)
         return os.path.join(CHROMA_PERSIST_DIRECTORY, collection_name)
-    
-    def create_vector_store(self, chunks: List[Document], user_id: str, session_id: str) -> Chroma:
+
+    def create_vector_store(self, chunks: List[Document], user_id: str, session_id: str, persist: bool = True) -> Chroma:
         """Create and persist vector store from document chunks with GCS backup."""
-        try:
-            if not chunks:
-                raise ValueError("No document chunks provided")
-            
-            collection_name = self.generate_collection_name(user_id, session_id)
-            
-            # Check if collection already exists and delete it to recreate
-            try:
-                existing_collection = self.chroma_client.get_collection(collection_name)
-                self.chroma_client.delete_collection(collection_name)
-                if not IS_PRODUCTION:
-                    logger.info(f"Deleted existing collection '{collection_name}' for recreation")
-            except Exception:
-                pass  # Collection doesn't exist, which is fine
-            
-            # Create ChromaDB vector store with persistence
-            vector_store = Chroma.from_documents(
-                documents=chunks,
-                embedding=self.embeddings,
-                collection_name=collection_name,
-                persist_directory=CHROMA_PERSIST_DIRECTORY,
-                client=self.chroma_client
-            )
-            
-            # Verify the collection was created and has data
-            collection = self.chroma_client.get_collection(collection_name)
-            doc_count = collection.count()
-            
-            if not IS_PRODUCTION:
-                logger.info(f"Created and persisted vector store '{collection_name}' with {doc_count} documents")
-            
-            if doc_count == 0:
-                raise ValueError(f"Vector store was created but contains no documents")
-            
+        if not chunks:
+            raise ValueError("No document chunks provided to create vector store.")
+
+        collection_name = self.generate_collection_name(user_id, session_id)
+        
+        # Determine persistence directory based on the 'persist' flag
+        persist_directory = CHROMA_PERSIST_DIRECTORY if persist else None
+
+        # Create ChromaDB vector store
+        vector_store = Chroma.from_documents(
+            documents=chunks,
+            embedding=self.embeddings,
+            collection_name=collection_name,
+            persist_directory=persist_directory,
+            client=self.chroma_client
+        )
+
+        if persist:
+            logger.info(f"Persisting vector store '{collection_name}' to disk.")
+            # The client is already in persistent mode, so creation with a directory handles it.
+            # We can force a persist call to be sure, though it's often implicit.
+            self.chroma_client.persist()
+
+            # Give ChromaDB time to write files to disk before GCS upload
+            import time
+            time.sleep(1)
+
             # Upload to GCS for persistence across deployments
             collection_local_path = self._get_collection_local_path(user_id, session_id)
             if os.path.exists(collection_local_path):
@@ -93,12 +86,11 @@ class QAPipeline:
                     logger.warning(f"Failed to upload vector store to GCS for user {user_id}, session {session_id}")
             else:
                 logger.warning(f"Collection local path not found for GCS upload: {collection_local_path}")
-            
-            return vector_store
-        except Exception as e:
-            logger.error(f"Error creating vector store: {str(e)}")
-            raise e
-    
+        else:
+            logger.info(f"Created in-memory vector store '{collection_name}' for evaluation.")
+
+        return vector_store
+
     def load_vector_store(self, user_id: str, session_id: str) -> Optional[Chroma]:
         """Load existing vector store for a user session, downloading from GCS if needed."""
         try:

@@ -1,66 +1,112 @@
 {
-  "description": "Test dataset for Italian student document Q&A system",
-  "version": "1.0",
+  "evaluation_metrics": {
+    "accuracy_threshold": 0.75
+  },
   "test_cases": [
     {
       "id": "eligibility_01",
-      "document_type": "bando_borsa_studio",
-      "question_en": "What are the eligibility criteria for this scholarship?",
-      "question_it": "Quali sono i criteri di eleggibilità per questa borsa di studio?",
-      "expected_answer_elements": [
-        "studente universitario",
-        "iscrizione regolare", 
-        "ISEE",
-        "media accademica"
-      ],
-      "source_content": "I criteri di eleggibilità per la borsa di studio includono: essere studente universitario regolarmente iscritto, avere un ISEE familiare non superiore a 25.000 euro, mantenere una media accademica di almeno 27/30.",
-      "relevance_score": 1.0
+      "question_en": "Who is eligible to apply for the Type A and Type B grants?",
+      "question_it": "Chi può presentare domanda per gli assegni di Tipologia A e Tipologia B?",
+      "expected_answer_en": "Type A grants are for students enrolled in master's degree programs with a minimum grade of 27/30. Type B grants are for students enrolled in PhD programs or specialization schools with a minimum grade of 105/110.",
+      "expected_answer_it": "Gli assegni di Tipologia A sono per studenti iscritti a corsi di laurea magistrale con voto minimo di 27/30. Gli assegni di Tipologia B sono per studenti iscritti a programmi di dottorato o scuole di specializzazione con voto minimo di 105/110."
     },
     {
       "id": "deadline_01",
-      "document_type": "bando_borsa_studio",
-      "question_en": "When is the application deadline?",
+      "question_en": "What is the deadline for submitting the application?",
       "question_it": "Qual è la scadenza per presentare la domanda?",
-      "expected_answer_elements": [
-        "31 marzo 2024",
-        "12:00",
-        "scadenza"
-      ],
-      "source_content": "La scadenza per la presentazione delle domande è fissata al 31 marzo 2024 alle ore 12:00. Non saranno accettate domande presentate dopo tale termine.",
-      "relevance_score": 1.0
+      "expected_answer_en": "The deadline for submitting applications is May 15, 2025 at 23:59.",
+      "expected_answer_it": "La scadenza per presentare le domande è il 15 Maggio 2025 alle ore 23:59."
     },
     {
-      "id": "documents_01", 
-      "document_type": "bando_borsa_studio",
-      "question_en": "What documents are required for the application?",
-      "question_it": "Quali documenti sono necessari per la domanda?",
-      "expected_answer_elements": [
-        "domanda compilata",
-        "ISEE",
-        "certificato iscrizione",
-        "autocertificazione voti"
-      ],
-      "source_content": "I documenti da allegare alla domanda sono: modulo di domanda debitamente compilato, ISEE in corso di validità, certificato di iscrizione all'anno accademico corrente, autocertificazione dei voti conseguiti.",
-      "relevance_score": 1.0
+      "id": "application_process_01",
+      "question_en": "How should candidates submit their application?",
+      "question_it": "Come devono presentare la domanda i candidati?",
+      "expected_answer_en": "Candidates must submit their application through the ESOL platform at esol.unina.it using their institutional email and password, then send required documents to dottric@unina.it.",
+      "expected_answer_it": "I candidati devono presentare la domanda tramite la piattaforma ESOL su esol.unina.it usando email e password istituzionali, poi inviare i documenti richiesti a dottric@unina.it."
     },
     {
-      "id": "amount_01",
-      "document_type": "bando_borsa_studio", 
-      "question_en": "How much is the scholarship worth?",
-      "question_it": "Qual è l'importo della borsa di studio?",
-      "expected_answer_elements": [
-        "5.500 euro",
-        "anno accademico",
-        "importo"
-      ],
-      "source_content": "L'importo della borsa di studio è pari a 5.500 euro per l'intero anno accademico, erogato in due rate semestrali di pari importo.",
-      "relevance_score": 1.0
+      "id": "required_documents_01",
+      "question_en": "Which documents are required for the application?",
+      "question_it": "Quali documenti sono richiesti per la domanda?",
+      "expected_answer_en": "Required documents include the application form (Modulo), Annex 1 (All. 1), and a substitute declaration (dichiarazione sostitutiva).",
+      "expected_answer_it": "I documenti richiesti includono il modulo di partecipazione, l'Allegato 1 (All. 1), e la dichiarazione sostitutiva di certificazione."
+    },
+    {
+      "id": "contact_info_01",
+      "question_en": "Who should be contacted for more information about the application?",
+      "question_it": "Chi bisogna contattare per maggiori informazioni sulla domanda?",
+      "expected_answer_en": "For more information, contact dottric@unina.it, annamaria.agnello@unina.it, daniela.galise@unina.it, or other specified university email addresses.",
+      "expected_answer_it": "Per maggiori informazioni, contattare dottric@unina.it, annamaria.agnello@unina.it, daniela.galise@unina.it, o altri indirizzi email universitari specificati."
+    },
+    {
+      "id": "grant_amount_01",
+      "question_en": "What is the amount of the Type A and Type B grants?",
+      "question_it": "Qual è l'importo degli assegni di Tipologia A e Tipologia B?",
+      "expected_answer_en": "Type A grants are €800.00 gross for 50 hours of work. Type B grants are €1,230.00 gross for 60 hours of work.",
+      "expected_answer_it": "Gli assegni di Tipologia A sono di €800,00 lordi per 50 ore di lavoro. Gli assegni di Tipologia B sono di €1.230,00 lordi per 60 ore di lavoro."
+    },
+    {
+      "id": "selection_criteria_01",
+      "question_en": "How are candidates evaluated for the Type A grants?",
+      "question_it": "Come vengono valutati i candidati per gli assegni di Tipologia A?",
+      "expected_answer_en": "Candidates are ranked based on a merit list using a formula that combines the weighted average of exam grades and acquired CFU credits, with α = 2/3. In case of ties, preference is given to the younger candidate.",
+      "expected_answer_it": "I candidati sono valutati con una graduatoria di merito basata su una formula che combina la media ponderata degli esami e i CFU acquisiti, con α = 2/3. In caso di parità, si preferisce il candidato più giovane."
+    },
+    {
+      "id": "selection_criteria_02",
+      "question_en": "How are candidates evaluated for the Type B grants?",
+      "question_it": "Come vengono valutati i candidati per gli assegni di Tipologia B?",
+      "expected_answer_en": "Candidates are ranked based on a merit list with up to 20 points for the degree grade (3 points for each point over 105, 5 points for honors), and up to 30 points for the interview based on candidate qualification and study path congruence.",
+      "expected_answer_it": "I candidati sono valutati con una graduatoria di merito con fino a 20 punti per il voto di laurea (3 punti per ogni punto oltre 105, 5 punti per la lode), e fino a 30 punti per il colloquio basato sulla qualificazione del candidato e congruenza del percorso di studi."
+    },
+    {
+      "id": "publication_dates_01",
+      "question_en": "When will the provisional and final rankings be published?",
+      "question_it": "Quando saranno pubblicate le graduatorie provvisorie e definitive?",
+      "expected_answer_en": "The provisional list will be published on May 29, 2025. The final ranking will be published online within 5 days after any corrections.",
+      "expected_answer_it": "L'elenco provvisorio sarà pubblicato il 29 Maggio 2025. La graduatoria definitiva sarà pubblicata online entro 5 giorni dalla rettifica."
+    },
+    {
+      "id": "result_notification_01",
+      "question_en": "How will candidates be notified about their admission results?",
+      "question_it": "Come verranno informati i candidati sui risultati di ammissione?",
+      "expected_answer_en": "Candidates will be notified through online publication on the university website www.unina.it and the Official Bulletin Board. No personal communications will be sent.",
+      "expected_answer_it": "I candidati verranno informati tramite pubblicazione online sul sito web universitario www.unina.it e sull'Albo Ufficiale. Non verranno inviate comunicazioni personali."
+    },
+    {
+      "id": "obligations_01",
+      "question_en": "What are the obligations of grant recipients?",
+      "question_it": "Quali sono gli obblighi degli assegnisti?",
+      "expected_answer_en": "Grant recipients must complete tutoring activities by October 31, 2026, collaborate on orientation activities, conduct activities in Italian, and submit a declaration of regular attendance.",
+      "expected_answer_it": "Gli assegnisti devono completare le attività di tutorato entro il 31 ottobre 2026, collaborare ad attività di orientamento, svolgere le attività in lingua italiana, e presentare una dichiarazione di regolare presenza."
+    },
+    {
+      "id": "incompatibility_01",
+      "question_en": "What situations make the grants incompatible?",
+      "question_it": "Quali situazioni rendono incompatibili gli assegni?",
+      "expected_answer_en": "Grants are incompatible with part-time student positions, research activity grants, tutoring activities at private structures, dependent or independent work, and require partial repayment of the grant in such cases.",
+      "expected_answer_it": "Gli assegni sono incompatibili con incarichi part-time studenti, assegni per attività di ricerca, attività di tutorato presso strutture private, lavoro dipendente o autonomo, e richiedono restituzione di quota parte dell'assegno in tali casi."
+    },
+    {
+      "id": "withdrawal_conditions_01",
+      "question_en": "Under what circumstances does a candidate lose the right to the grant?",
+      "question_it": "In quali casi il candidato decade dal diritto all'assegno?",
+      "expected_answer_en": "Candidates lose the right to the grant upon obtaining the final degree, failure to accept within the deadline, unjustified failure to start activities, interruption of activities, violation of incompatibility rules, or serious misconduct.",
+      "expected_answer_it": "I candidati decadono dal diritto all'assegno al conseguimento del titolo finale, mancata accettazione nei termini, ingiustificato mancato inizio attività, interruzione attività, violazione incompatibilità, o gravi inadempienze."
+    },
+    {
+      "id": "payment_01",
+      "question_en": "How and when will the grant be paid?",
+      "question_it": "Come e quando verrà corrisposto l'assegno?",
+      "expected_answer_en": "The grant will be paid in a single payment after submission of a declaration of regular attendance and the number of hours worked, with proportional payment based on actual hours performed through INPS separate management.",
+      "expected_answer_it": "L'assegno verrà corrisposto in unica soluzione dopo la presentazione di una dichiarazione di regolare presenza e numero ore attività prestate, con pagamento proporzionale alle ore effettivamente svolte tramite INPS gestione separata."
+    },
+    {
+      "id": "contacts_pup_sinapsi_01",
+      "question_en": "Who should be contacted for issues regarding PUP and SInAPSi positions?",
+      "question_it": "Chi contattare per problematiche relative alle posizioni PUP e SInAPSi?",
+      "expected_answer_en": "For issues regarding PUP and SInAPSi positions, contact infopolopenitenziario@unina.it, tutorato.specializzato@unina.it, or dottric@unina.it.",
+      "expected_answer_it": "Per problematiche relative alle posizioni PUP e SInAPSi, contattare infopolopenitenziario@unina.it, tutorato.specializzato@unina.it, o dottric@unina.it."
     }
-  ],
-  "evaluation_metrics": {
-    "accuracy_threshold": 0.7,
-    "completeness_min_words": 15,
-    "relevance_threshold": 0.8,
-    "hallucination_tolerance": 0.1
-  }
+  ]
 }
