@@ -80,5 +80,5 @@ gcloud run deploy "$SERVICE_NAME" \
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 
 echo ""
-echo "🎉 Deployment successful!"
-echo "🌐 Your application is now available at: $SERVICE_URL"
+echo "Deployment successful!"
+echo "Your application is now available at: $SERVICE_URL"

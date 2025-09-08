@@ -15,7 +15,7 @@ import unicodedata
 from pathlib import Path
 from dotenv import load_dotenv
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Add the parent directory to the Python path to find app modules
@@ -32,8 +32,8 @@ class RAGEvaluator:
     def __init__(self):
         self.qa_pipeline = QAPipeline()
         self.pdf_processor = PDFProcessor()
-        # Use a more advanced multilingual sentence transformer for better accuracy
-        self.similarity_model = SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')
+        # Use the same embedding model as the app (consistency with QAPipeline)
+        self.embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
         self.results = []
 
     def load_test_dataset(self, dataset_path: str) -> Dict:
@@ -70,43 +70,33 @@ class RAGEvaluator:
 
     def evaluate_answer_accuracy(self, answer: str, expected_answer: str, threshold: float = 0.6) -> float:
         """
-        Enhanced semantic similarity evaluation with better preprocessing and scoring.
+        Semantic similarity using the same embeddings as the app (Google Generative AI).
         Returns a score between 0 and 1.
         """
         if not answer or not expected_answer:
             return 0.0
-        
-        # Preprocess both texts
+
+        # Preprocess
         answer_clean = self._preprocess_text(answer)
         expected_clean = self._preprocess_text(expected_answer)
-        
         if not answer_clean or not expected_clean:
             return 0.0
-        
-        # Handle exact matches after preprocessing
         if answer_clean == expected_clean:
             return 1.0
-        
-        # Calculate semantic similarity using sentence transformers
+
         try:
-            # Use batch processing for efficiency
-            embeddings = self.similarity_model.encode([answer_clean, expected_clean], convert_to_tensor=False)
-            similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
-            
-            # Enhanced scoring logic
+            # Embed both strings with the app’s embedding model
+            vecs = self.embedding_model.embed_documents([answer_clean, expected_clean])
+            similarity = cosine_similarity([vecs[0]], [vecs[1]])[0][0]
+
             if similarity >= threshold:
-                # Full credit for high similarity
                 return float(similarity)
             elif similarity >= threshold * 0.7:
-                # Partial credit for moderate similarity
                 return float(similarity * 0.8)
             else:
-                # Minimal credit for low similarity, but not zero
                 return float(similarity * 0.3)
-                
         except Exception as e:
             print(f"Error calculating similarity: {e}")
-            # Enhanced fallback with better word overlap
             return self._enhanced_fallback_similarity(answer_clean, expected_clean)
 
     def _enhanced_fallback_similarity(self, answer: str, expected: str) -> float:
